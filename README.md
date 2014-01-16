@@ -23,8 +23,8 @@
 <dd>Web 2.0/Ajax/DHTML make the interface responsive
 <dd>Easy File upload using Ajax and IFrames
 <dd>Perl Class DBI with Embperl means I can write code like this, right in the HTML document, without writing any SQL
-<block><pre>
-foreach my $cat (HDS::Category->retrieve_all()) {
+<block>
+```foreach my $cat (HDS::Category->retrieve_all()) {
 	if ($user->access->level >= $cat->access->level) {
 		push @categories, $cat;
 	}
@@ -44,7 +44,7 @@ foreach my $cat (HDS::Category->retrieve_all()) {
 	<div class="category_body">[+ $cat->description +]
 	<table class="document_management" id="document_list_[+ $cat->id +]">
 ...ETC...
-</pre>
+```
 </block>
 A User may have access to the Category of Files, or individual document.
     The --&gt; means the data is retrieved from more than one table in the database
