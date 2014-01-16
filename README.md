@@ -2,13 +2,18 @@
 
 <hr/>
 
-Server side:
-Apache with Embperl (mod-perl based module installed
-Perl with Class::DBI installed
-MySQL database
+<h3>Server side</h3>
+<i>Under lib/ directory</i>
+<dl>
+<dd>Apache with Embperl (mod-perl based module installed
+<dd>Perl with Class::DBI installed
+<dd>MySQL database
+</dl>
 
 
-Client-side:
+
+#Client-side:
+##Web document root: www/
 Any widely supported web browser
 
 
