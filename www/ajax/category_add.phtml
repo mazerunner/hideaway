@@ -1,0 +1,55 @@
+[-
+ use CGI::Cookie;
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Category;
+
+ $cat     = undef;
+ $user    = undef;
+ %cookie_jar = CGI::Cookie->fetch($r);
+ $user_access = 0;
+ $success     = 0;
+ $message     = "No information available";
+ $content     = "No information available";
+ $sep_char    = "~~~~~";
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{access_id} && $fdat{name} && $fdat{description}) {
+      my @dups = HDS::Category->search({name => $fdat{name}});
+      if (scalar @dups > 0) {
+         $message = "Document Category named $fdat{name} already exists.";
+      }
+      else {
+         $cat = HDS::Category->insert({name        => $fdat{name},
+                                       description => $fdat{description},
+                                       access      => $fdat{access_id},
+                                       is_active   => $fdat{is_active},
+                                    });
+         if ($cat) {
+            $success = 1;
+            $message = "Document Category $fdat{name} created successfully.";
+            $content = '<tr><td>'.$cat->name.'</td>' .
+                '<td>'.$cat->description.'</td>' .
+                '<td>'.$cat->access->name.'</td>' .
+                '<td><select id="cat_action" name="cat_action" onChange="cat_take_action(' . 
+                $cat->id . ', this[this.selectedIndex].value);">' .
+                '<option value="">Select</option>
+                <option value="edit">Edit</option>
+                <option value="active">Inactivate</option>
+                <option value="delete">Delete</option>
+                </select></td>
+                </tr>
+                ';
+         }
+      }
+   }
+   else {
+      $message = "Name, Description and Access are required.";
+   }
+}
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][+ $sep_char +][+ $content +][- $escmode = $old_escmode; -]

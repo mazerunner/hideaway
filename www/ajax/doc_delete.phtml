@@ -1,0 +1,46 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Document;
+
+ $doc         = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ $success     = 0;
+ $message     = "No information available";
+ $sep_char    = "~~~~~";
+ $doc_dir     = "$ENV{SVR_HOME}/files/hideaway/$ENV{SVR_NAME}";
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{doc_id}) {
+      $doc = HDS::Document->retrieve($fdat{doc_id});
+   }
+   if ($doc) {
+      if (-f "$doc_dir/".$doc->file_path) {
+         unlink "$doc_dir/".$doc->file_path;
+      }
+      
+      foreach ($doc->comments()) {
+         $_->delete();
+      }
+
+      $doc->delete();
+
+      $success = 1;
+      $message = "Document successfully deleted.";
+   }
+   else {
+      $message = "Document does not exist.  Please refresh the page.";
+   }
+}
+ else {
+    $message = "Please login.";
+ }
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][- $escmode = $old_escmode; -]

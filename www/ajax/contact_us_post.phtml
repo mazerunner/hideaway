@@ -1,0 +1,45 @@
+[-
+ use CGI::Cookie;
+
+ use HDS::DBI;
+ use HDS::User;
+
+ $user    = undef;
+ %cookie_jar = CGI::Cookie->fetch($r);
+
+@recipients = ('stevew@wildersolutions.com',
+	'stevew.techrg@gmail.com'
+	);
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+foreach $to (@recipients) {
+	open MAIL, "| /usr/lib/sendmail -t";
+	print MAIL "To: $to\n";
+	print MAIL "From: Hideaway HOA Website \<stevew\@wildersolutions.com\>\n";
+	print MAIL "Subject: Hideaway Contact Us\n";
+	print MAIL "Content-type: text/html\n";
+	print MAIL "\n";
+	print MAIL qq{
+	    <HTML>
+		<BODY style="font-family: Arial, Helvetica, Sans-Serif; ">
+		<h2>Hideaway HOA Website Contact Us</h2>
+		<hr>
+		<table>
+	};
+	foreach (sort keys %fdat) {
+		print MAIL "<tr><td>" . $_ . "</td>";
+		print MAIL "<td>" . $fdat{$_} . "</td></tr>\n";
+	}
+	print MAIL "</table></body></html>\n";
+	close MAIL;
+}
+-]
+<blockquote>
+Thank you for taking the time to send us your comments.  We appreciate your feedback!
+<p>
+Someone will be contacting you shortly.
+</blockquote>
+- The Hideaway Web Site

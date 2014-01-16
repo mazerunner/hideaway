@@ -1,0 +1,665 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+use HDS::Document;
+use HDS::Category;
+
+$user    = undef;
+@categories = ();
+@docs        = ();
+@all_docs    = ();
+%cookie_jar  = CGI::Cookie->fetch($r);
+$user_access = 0;
+@all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+$access      = {};
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+foreach my $a (HDS::Access->retrieve_all()) {
+	$access->{$a->name} = $a;
+}
+
+if ($user) {
+	$user_access = $user->access->level;
+}
+
+foreach my $cat (HDS::Category->retrieve_all()) {
+	if ($user_access >= $cat->access->level) {
+		push @categories, $cat;
+	}
+}
+
+ @categories = sort {$a->access->level <=> $b->access->level} @categories;
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<meta http-equiv="Content-Type" content="text-html; charset=utf-8"> 
+<!--
+<link rel="stylesheet" type="text/css" href="/js/jquery_plugins/jquery.tablesorter/themes/blue/style.css" />
+<script type="text/javascript" src="/js/jquery_plugins/jquery.tablesorter/jquery.tablesorter.min.js"></script>
+-->
+<script type="text/javascript">
+
+var loading1_img = new Image;
+loading1_img.src = "/images/loading1.gif";
+
+var loading2_img = new Image;
+loading2_img.src = "/images/loading2.gif";
+
+var user_active_img = new Image;
+user_active_img.src = "images/user_has_access.gif";
+
+var user_inactive_img = new Image;
+user_inactive_img.src = "images/user_has_no_access.gif";
+
+function doc_download(doc_id) {
+	var theURL = 'ajax/doc_download.pl?uniq='+new Date().getTime()+"&doc_id="+doc_id;
+
+	theURL = 'http://thehideawayhoa.com/' + theURL;
+	alert(theURL);
+	location.href = theURL;
+
+	
+
+	//window.open(theURL);
+
+	//window.location.href = 'ajax/doc_download.pl?uniq='+new Date().getTime()+"&doc_id="+doc_id;
+	//location.href = 'ajax/doc_download.pl?uniq='+new Date().getTime()+"&doc_id="+doc_id;
+}
+
+function doc_take_action(doc_id, action) {
+	if (action == '') {
+		return false;
+	}
+	else if (action == 'download') {
+		doc_download(doc_id);
+		return false;
+	}
+	else if (action == 'edit') {
+		if ($("#doc_edit_row_"+doc_id).css('display') == 'none') {
+			$("#doc_edit_"+doc_id).html('<img src="/images/loading1.gif">');
+			$("#doc_replace_row_"+doc_id).hide();
+			$("#doc_comments_row_"+doc_id).hide();
+			$("#doc_edit_row_"+doc_id).show();
+			
+			$.post('ajax/doc_edit_form.phtml?uniq='+new Date().getTime(), 'doc_id='+doc_id, function (data, textStatus) {
+				$("#doc_edit_"+doc_id).html(data);
+			});
+			return false;
+		}
+		else {
+			$("#doc_edit_row_"+doc_id).hide();
+			return false;
+		}
+
+	}
+	else if (action == 'comments') {
+		if ($("#doc_comments_row_"+doc_id).css('display') == 'none') {
+			$("#doc_edit_row_"+doc_id).hide();
+			$("#doc_replace_row_"+doc_id).hide();
+			$("#doc_comments_row_"+doc_id).show();
+			return false;
+		}
+		else {
+			$("#doc_comments_row_"+doc_id).hide();
+			return false;
+		}
+	}
+	else if (action == 'replace') {
+		if ($("#doc_replace_row_"+doc_id).css('display') == 'none') {
+			$("#doc_edit_row_"+doc_id).hide();
+			$("#doc_comments_row_"+doc_id).hide();
+			$("#doc_replace_row_"+doc_id).show();
+			return false;
+		}
+		else {
+			$("#doc_replace_row_"+doc_id).hide();
+			return false;
+		}
+	}
+	else if (action == 'delete') {
+		if (confirm ('Are you sure you want to delete '+ $("#display_title_"+doc_id).text())) {
+			$.post('ajax/doc_delete.phtml?uniq='+new Date().getTime(), 'doc_id='+doc_id, function(data, textStatus) {
+				if (data == '') {
+					alert('No response from server '+textStatus);
+					return false;
+				}
+				var return_data = data.split('~~~~~');
+				if (return_data[0] == '0') {
+					alert(return_data[1]);
+					return false;
+				}
+				else {
+					$("#display_row_"+doc_id).hide();
+					$("#doc_edit_row_"+doc_id).hide();
+					$("#doc_replace_row_"+doc_id).hide();
+					$("#doc_comments_row_"+doc_id).hide();
+					return false;
+				}
+			});
+		}
+	}
+	else if (action == 'replace') {
+		alert("Replace not supported, yet.");
+	}
+}
+
+function edit_document_file(form, doc_id) {
+	var wrong      = '';
+	var content    = '';
+	
+	if (form.title.value == '') {
+		wrong += "Please provide a Title\n";
+	}
+	if (form.description.value == '') {
+		wrong += "Please provide a Description\n";
+	}
+	//if (form.upload_file.value == '') {
+	//	wrong += "Please provide a Document to upload\n";
+	//}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+
+	$("#doc_edit_"+doc_id).html('<img src="/images/loading2.gif">');
+	
+	iframeId = document.getElementById("edit_upload_iframe_"+doc_id);
+	
+	// Add event...
+	var eventHandler = function()  {
+		if (iframeId.detachEvent)
+			iframeId.detachEvent("onload", eventHandler);
+		else
+			iframeId.removeEventListener("load", eventHandler, false);
+
+		// Message from server...
+		if (iframeId.contentDocument) {
+			content = iframeId.contentDocument.body.innerHTML;
+			iframeId.contentDocument.body.innerHTML = '';
+		} else if (iframeId.contentWindow) {
+			content = iframeId.contentWindow.document.body.innerHTML;
+			iframeId.contentWindow.document.body.innerHTML = '';
+		} else if (iframeId.document) {
+			content = iframeId.document.body.innerHTML;
+			iframeId.document.body.innerHTML = '';
+		}
+		
+		//alert(iframe.html());
+		
+		if (content == '') {
+		
+		}
+		else {
+			alert(content);
+			var pieces = content.split('~~~~~');
+			/*if (pieces[0] == '0') {
+				status_div.html(pieces[1]);
+			}
+			else if (pieces[0] == '1') {
+				status_div.html(pieces[1]);
+				var new_row = '<tr>';
+				var tds = pieces[2].split('|');
+				for (var i=0; i< tds.length; i++) {
+					new_row += '<td>' + tds[i] + '</td>';
+				}
+				new_row += '</tr>';
+				$("#document_list_"+cat_id).children('tbody').append(new_row);
+				form.reset();
+			}*/
+		}
+	}
+
+	if (iframeId.addEventListener)
+		iframeId.addEventListener("load", eventHandler, true);
+	if (iframeId.attachEvent)
+		iframeId.attachEvent("onload", eventHandler);
+
+	// Submit the form...
+	form.submit();
+
+	status_div.html('<img src="/images/loading2.gif">  Uploading: ' + form.upload_file.value);
+
+	return false;
+	var editURL  = 'ajax/doc_edit.phtml?uniq=' + new Date().getTime();
+	var editData = $(form).serialize();
+	
+	$.post(editURL, editData, function (data, textStatus) {
+		var return_data = data.split('~~~~~');
+		if (data == '') {
+			$("#doc_edit_"+doc_id).html('No response from server.  Please refresh this page.');
+			return false;
+		}
+		if (return_data[0] == '0') {
+			$("#doc_edit_"+doc_id).html(return_data[1]);
+		}
+		else if (return_data[0] == '1') {
+			$("#doc_edit_"+doc_id).html(return_data[1]);
+			$("#display_title_"+doc_id).html(return_data[2]);
+			$("#display_description_"+doc_id).html(return_data[3]);
+			$("#display_access_"+doc_id).html(return_data[4]);
+		}
+		else {
+			$("#doc_edit_"+doc_id).html(return_data[1]);
+		}
+		return false;
+	});
+			
+}
+
+function edit_document(form, doc_id) {
+	var wrong      = '';
+	var content    = '';
+	
+	if (form.title.value == '') {
+		wrong += "Please provide a Title\n";
+	}
+	if (form.description.value == '') {
+		wrong += "Please provide a Description\n";
+	}
+	//if (form.upload_file.value == '') {
+	//	wrong += "Please provide a Document to upload\n";
+	//}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	$("#doc_edit_"+doc_id).html('<img src="/images/loading2.gif">');
+	
+	var editURL  = 'ajax/doc_edit.phtml?uniq=' + new Date().getTime();
+	var editData = $(form).serialize();
+	
+	$.post(editURL, editData, function (data, textStatus) {
+		var return_data = data.split('~~~~~');
+		if (data == '') {
+			$("#doc_edit_"+doc_id).html('No response from server.  Please refresh this page.');
+			return false;
+		}
+		if (return_data[0] == '0') {
+			$("#doc_edit_"+doc_id).html(return_data[1]);
+		}
+		else if (return_data[0] == '1') {
+			$("#doc_edit_"+doc_id).html(return_data[1]);
+			$("#display_title_"+doc_id).html(return_data[2]);
+			$("#display_description_"+doc_id).html(return_data[3]);
+			$("#display_access_"+doc_id).html(return_data[4]);
+		}
+		else {
+			$("#doc_edit_"+doc_id).html(return_data[1]);
+		}
+		return false;
+	});
+			
+}
+
+function add_document(form, cat_id) {
+	var body_div   = $("#new_document_body_"+cat_id);
+	var status_div = $("#new_document_status_"+cat_id);
+	var iframe     = $("#new_upload_iframe_"+cat_id);
+	var doc_list   = $("#document_list_"+cat_id);
+	var wrong      = '';
+	var content    = '';
+	
+	if (form.title.value == '') {
+		wrong += "Please provide a Title\n";
+	}
+	if (form.description.value == '') {
+		wrong += "Please provide a Description\n";
+	}
+	if (form.upload_file.value == '') {
+		wrong += "Please provide a Document to upload\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	iframeId = document.getElementById("new_upload_iframe_"+cat_id);
+	
+	// Add event...
+	var eventHandler = function()  {
+		if (iframeId.detachEvent)
+			iframeId.detachEvent("onload", eventHandler);
+		else
+			iframeId.removeEventListener("load", eventHandler, false);
+
+		// Message from server...
+		if (iframeId.contentDocument) {
+			content = iframeId.contentDocument.body.innerHTML;
+			iframeId.contentDocument.body.innerHTML = '';
+		} else if (iframeId.contentWindow) {
+			content = iframeId.contentWindow.document.body.innerHTML;
+			iframeId.contentWindow.document.body.innerHTML = '';
+		} else if (iframeId.document) {
+			content = iframeId.document.body.innerHTML;
+			iframeId.document.body.innerHTML = '';
+		}
+		
+		//alert(iframe.html());
+		
+		if (content == '') {
+		
+		}
+		else {
+			var pieces = content.split('~~~~~');
+			if (pieces[0] == '0') {
+				status_div.html(pieces[1]);
+			}
+			else if (pieces[0] == '1') {
+				status_div.html(pieces[1]);
+				var new_row = '<tr>';
+				var tds = pieces[2].split('|');
+				for (var i=0; i< tds.length; i++) {
+					new_row += '<td>' + tds[i] + '</td>';
+				}
+				new_row += '</tr>';
+				$("#document_list_"+cat_id).children('tbody').append(new_row);
+				form.reset();
+			}
+		}
+	}
+
+	if (iframeId.addEventListener)
+		iframeId.addEventListener("load", eventHandler, true);
+	if (iframeId.attachEvent)
+		iframeId.attachEvent("onload", eventHandler);
+
+	// Submit the form...
+	form.submit();
+
+	status_div.html('<img src="/images/loading2.gif">  Uploading: ' + form.upload_file.value);
+
+	return false;
+}
+
+function replace_document(form, doc_id) {
+	var wrong      = '';
+	var content    = '';
+	
+	if (form.upload_file.value == '') {
+		wrong += "Please provide a Document to upload\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	$("#doc_replace_status_"+doc_id).html('<img src="images/loading2.gif">  Uploading: ' + form.upload_file.value);
+	iframeId = document.getElementById("replace_upload_iframe_"+doc_id);
+	
+	// Add event...
+	var eventHandler = function()  {
+		if (iframeId.detachEvent)
+			iframeId.detachEvent("onload", eventHandler);
+		else
+			iframeId.removeEventListener("load", eventHandler, false);
+
+		// Message from server...
+		if (iframeId.contentDocument) {
+			content = iframeId.contentDocument.body.innerHTML;
+			iframeId.contentDocument.body.innerHTML = '';
+		} else if (iframeId.contentWindow) {
+			content = iframeId.contentWindow.document.body.innerHTML;
+			iframeId.contentWindow.document.body.innerHTML = '';
+		} else if (iframeId.document) {
+			content = iframeId.document.body.innerHTML;
+			iframeId.document.body.innerHTML = '';
+		}
+		
+		//alert(iframe.html());
+		
+		if (content == '') {
+		
+		}
+		else {
+			var pieces = content.split('~~~~~');
+			if (pieces[0] == '0') {
+				alert(pieces[1]);
+			}
+			else if (pieces[0] == '1') {
+				$("#doc_replace_status_"+doc_id).html(pieces[1]);
+				form.reset();
+			}
+		}
+	}
+
+	if (iframeId.addEventListener)
+		iframeId.addEventListener("load", eventHandler, true);
+	if (iframeId.attachEvent)
+		iframeId.attachEvent("onload", eventHandler);
+
+	// Submit the form...
+	form.submit();
+
+	status_div.html('<img src="/images/loading2.gif">  Uploading: ' + form.upload_file.value);
+
+	return false;
+}
+
+function post_comment(doc_id) {
+   var postURL = "ajax/post_document_comment.phtml?uniq=" + new Date().getTime();
+   var postData = '&doc_id='+doc_id+'&comment=' + escape($("#new_comment_"+doc_id).val());
+   
+   $("#new_comment_status_"+doc_id).html('<img src="/images/loading2.gif">');
+   
+   $.post(postURL, postData, function (data, textStatus) {
+		$("#comments_detail_"+doc_id).children('tbody').append(data);
+		$("#new_comment_status_"+doc_id).html('&nbsp;');
+    });
+}
+
+function delete_comment(comment_id) {
+	//if (confirm ('Are you sure you want to delete '+ $("#display_title_"+doc_id).text())) {
+		$.post('ajax/comment_delete.phtml?uniq='+new Date().getTime(), 'comment_id='+comment_id, function(data, textStatus) {
+			if (data == '') {
+				alert('No response from server '+textStatus);
+				return false;
+			}
+			var return_data = data.split('~~~~~');
+			if (return_data[0] == '0') {
+				alert(return_data[1]);
+				return false;
+			}
+			else {
+				$("#display_comment_"+comment_id).hide();
+				return false;
+			}
+		});
+	//}
+
+	return false;
+}
+
+
+$(document).ready(function() {
+	$('.new_document_body').hide();
+	//$('.edit_win').hide();
+	$('.hide_row').hide();
+	//$('.hide_row').css('display', 'none');
+	
+
+	$(".new_document_toggle").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+	
+	$('.new_document_toggle').click( function() {
+		var checkElement = $(this).next();
+		if(($(checkElement).is('div')) && ($(checkElement).is(':visible'))) {
+			$(checkElement).slideUp('normal');
+			return false;
+		}
+		if(($(checkElement).is('div')) && (!$(checkElement).is(':visible'))) {
+			$(checkElement).slideDown('normal');
+			return false;
+		}
+	});
+});
+
+</script>
+[$ foreach $cat (@categories) $]
+	[- 
+	@docs = ();
+	foreach $doc ($cat->documents()) {
+		if ($user_access >= $doc->access->level) {
+			push @docs, $doc;
+			push @all_docs, $doc;
+		}
+	}
+	-]
+	<div class="category_header">[+ $cat->name +] &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>(Requires [+ $cat->access->name +] access to see)</i></div>
+	<div class="category_body">[+ $cat->description +]
+	<table class="document_management" id="document_list_[+ $cat->id +]">
+<thead>
+<tr><th width="20%">Title</th>
+<th width="14%">Action</th>
+<th width="37%">Description</th>
+<th width="8%">Access</th>
+<th width="11%">Created</th>
+<th width="6%">Size</th>
+<th width="4%">D/L</th></tr>
+</thead>
+<tbody>
+	[$ foreach $doc (@docs) $]
+	<tr id="display_row_[+ $doc->id +]">
+	<td id="display_title_[+ $doc->id +]"><a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'download');">[+ $doc->title +]</a></td>
+	<td id="display_tools_[+ $doc->id +]"><a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'download');" title="Download">
+	[$ if ($doc->mime_type eq "text/plain") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_text.gif" border=0></a>
+	[$ elsif ($doc->mime_type eq "application/msword") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_word.gif" border=0></a>
+	[$ elsif ($doc->mime_type eq "application/pdf") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_pdf.gif" border=0></a>
+	[$ elsif ($doc->mime_type eq "application/zip") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_zip.gif" border=0></a>
+	[$ else $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/download1.gif" border=0></a>
+	[$ endif $]
+	
+	<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'edit');" title="Edit"><img src="images/obj_edit.gif" border=0></a>
+[#
+	[$ if ($doc->is_active) $]
+	<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'inactive');" title="Make Inactive"><img id="doc_active_img_[+ $doc->id +]" src="images/obj_has_access.gif" border=0></a>
+	[$ else $]
+	<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'active');" title="Make Active"><img id="doc_active_img_[+ $doc->id +]" src="images/obj_has_no_access.gif" border=0></a>
+	[$ endif $]
+#]
+	<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'replace');" title="Replace File"><img src="images/file_add.gif" border=0></a>
+	<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'comments');" title="Edit Comments"><img src="images/comments1.gif" border=0></a>
+	<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'delete');" title="Delete"><img src="images/obj_delete.gif" border=0></a>
+	</td>
+	<td id="display_description_[+ $doc->id +]">[+ $doc->description +]</td>
+	<td id="display_access_[+ $doc->id +]">[+ $doc->access->name +]</td>
+	<td>[+ HDS::DBI::display_date($doc->create_date) +]</td>
+	<td id="display_size_[+ $doc->id +]">[+ $doc->display_size() +]</td>
+	<td id="display_count_[+ $doc->id +]">[+ $doc->download_count +]</td>
+	</tr>
+	
+	<tr class="hide_row" id="doc_edit_row_[+ $doc->id +]">
+	<td colspan=8><div class="edit_win" id="doc_edit_[+ $doc->id +]"></div>
+	</td></tr>
+	
+	<tr class="hide_row" id="doc_replace_row_[+ $doc->id +]">
+	<td colspan=8><div class="edit_win" id="doc_replace_[+ $doc->id +]">
+	<blockquote>
+	<form action="/ajax/doc_upload_replace.phtml" method="post" enctype="multipart/form-data" target="replace_upload_iframe_[+ $doc->id +]">
+	<input type="hidden" name="doc_id" id="doc_id" value="[+ $doc->id +]">
+	<b>Replace With:</b> <input type=file name="upload_file" id="upload_file">
+	<br>
+	<div id="doc_replace_status_[+ $doc->id +]">&nbsp;</div>
+	<button style="background:#ffffff;" onClick="replace_document(this.form, [+ $doc->id +]); return false;">Replace <img src="/images/file_add.gif" border=0></button>
+	</blockquote>
+	</form>
+	</div>
+	</td></tr>
+	
+	<tr class="hide_row" id="doc_comments_row_[+ $doc->id +]">
+	<td colspan=8><div class="edit_win" id="doc_comments_[+ $doc->id +]" >
+	<table cellspacing=0 cellpadding=0 class="comments_detail" id="comments_detail_[+ $doc->id +]">
+	<tbody>
+	[$ if (scalar $doc->comments({is_active => 1}) == 0) $]
+	<tr><td class="comments_user">No Comments made</td><td class="comments_comment">&nbsp;</td></tr>
+	[$ else $]
+	[$ foreach $comment ($doc->comments({is_active => 1})) $]
+	<tr id="display_comment_[+ $comment->id +]"><td class="comments_user">[+ $comment->user->full_name +]<br><i>[+ HDS::DBI::display_date($comment->create_date) +]</i></td>
+	<td class="comments_comment">[+ $comment->comment +]</td>
+	<td><a href="javascript:;" title="Delete Comment" onClick="delete_comment([+ $comment->id +]); return false;"><img src="images/obj_delete.gif" border=0></tr>
+	[$ endforeach $]
+	[$ endif $]
+	</tbody>
+	</table>
+	<div id="new_comment_status_[+ $doc->id +]">&nbsp;</div>
+	<div id="new_comment_div_[+ $doc->id +]">
+	<table class="new_comment">
+	<tr><td valign="top">Leave a comment:</td>
+	<td><textarea name="new_comment_[+ $doc->id +]" id="new_comment_[+ $doc->id +]" cols=40 rows=3 wrap="hard"></textarea></td></tr>
+	<tr>
+	<td>&nbsp;</td><td><button id="post_button_[+ $doc->id +]" style="background:#ffffff;" onClick="post_comment([+ $doc->id +]);">Post <img id="comments_toggle_[+ $doc->id +]" src="/images/comments2.gif" border=0></button></td></tr>
+	</table>
+	</div>
+	</div>
+	</td></tr>
+	[$ endforeach $]
+</tbody>
+</table>
+	
+	[$ if ($user_access >= $access->{'Board Member'}->level) $][# BM access #]
+	<img class="new_document_toggle" id="new_document_toggle" src="/images/add_doc.gif" border=0>
+	<div class="new_document_body" id="new_document_body_[+ $cat->id +]">
+	<div id="new_document_status_[+ $cat->id +]" class="new_document_status">Upload a new document</div>
+	<form action="/ajax/doc_upload.phtml" method="post" enctype="multipart/form-data" target="new_upload_iframe_[+ $cat->id +]">
+	<table>
+	<tr><td valign="top">Owner:</td>
+	<td>[+ $user->full_name +]<input type="hidden" name="owner_id" value="[+ $user->id +]"></td></tr>
+	<tr><td valign="top">Category:</td>
+	<td>[+ $cat->name +]<input type="hidden" name="category_id" value="[+ $cat->id +]"></td></tr>
+	<tr><td valign="top">Access:</td><td><select name="access_id">
+	[$ foreach (@all_access) $]
+	[$ if ($_->level >= $cat->access->level) $]
+	<option value="[+ $_->id +]">[+ $_->name +]</option>
+	[$ endif $]
+	[$ endforeach $]</select></td></tr>
+	<tr><td valign="top">Title:</td><td><input type="text" name="title" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Description:</td><td><input type="text" name="description" size=50 maxlength=200></td></tr>
+	<tr><td valign="top">Document:</td><td><input type="file" name="upload_file" size=50></td></tr>
+	<tr><td valign="top">Visible:</td><td><input type="checkbox" name="is_active" value="1" checked="on"></td></tr>
+	
+	<tr>
+	<td>&nbsp;</td><td><button style="background:#ffffff;" onClick="add_document(this.form, [+ $cat->id +]); return false;" border=0>Add <img src="/images/add_doc.gif" border=0></button></td></tr>
+	</table>
+	</form>
+	</div>
+	[$ endif $] [# BM access #]</div>
+	<p>
+[$ endforeach $]
+	
+[$ foreach $cat (@categories) $]
+[# <iframe style="width:0px; hieght:0px; " id="new_document_iframe_[+ $cat->id +]"></iframe> #]
+<iframe style="visibility:hidden; width:0px; height:0px; " id="new_upload_iframe_[+ $cat->id +]"  name="new_upload_iframe_[+ $cat->id +]"></iframe>
+[$ endforeach $]
+
+[$ foreach $doc (@all_docs) $]
+[# <iframe style="width:0px; hieght:0px; " id="new_document_iframe_[+ $cat->id +]"></iframe> #]
+<iframe style="visibility:hidden; width:0px; height:0px; " id="replace_upload_iframe_[+ $doc->id +]"  name="replace_upload_iframe_[+ $doc->id +]"></iframe>
+[$ endforeach $]

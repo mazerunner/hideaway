@@ -1,0 +1,48 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::WebContent;
+
+ $web         = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ @all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{content_id}) {
+      $web = HDS::WebContent->retrieve($fdat{content_id});
+   }
+}
+-]
+[$ if ($web) $]
+	<form>
+	<input type="hidden" name="content_id" id="content_id" value="[+ $web->id +]">
+	<blockquote>
+	<table>
+	<tr><td><b>Placement</b></td><td><select name="content_order">
+	[$ foreach my $i (1..10) $]
+	<option value="[+ $i +]" [$ if ($web->content_order == $i) $]selected[$ endif $]>[+ $i +]</option>
+	[$ endforeach $]
+	</select></td></tr>
+	<tr><td><b>Access</b></td><td><select name="access_id">
+	[$ foreach (@all_access) $]
+	<option value="[+ $_->id +]" [$ if ($web->access->id == $_->id) $]selected[$ endif $]>[+ $_->name +]</option>
+	[$ endforeach $]</select></td></tr>
+	<tr><td><b>Content</b></td><td>
+	<textarea cols=80 rows=10 name="content_html" id="content_html">[- $old_escmode = $escmode; $escmode = 0; -][+ $web->content +][- $escmode = $old_escmode; -]</textarea></td></tr>
+	<tr><td>&nbsp;</td>
+	<td>[#<button style="background:#ffffff;" onClick="preview_content(this.form); return false;">Preview <img src="/images/ie.gif" border=0></button>#]
+	<button style="background:#ffffff;" onClick="edit_content(this.form); return false;">Edit <img src="/images/obj_edit.gif" border=0></button></td></tr>
+	</table>
+	</blockquote>
+	</form>
+[$ else $]
+WebContent Not Found.  Please refresh the page.
+[$ endif $]

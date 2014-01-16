@@ -1,0 +1,52 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+
+ $edit_user   = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ @all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{user_id}) {
+      $edit_user = HDS::User->retrieve($fdat{user_id});
+   }
+}
+-]
+[$ if ($edit_user) $]
+	<form>
+	<input type="hidden" name="user_id" value="[+ $edit_user->id +]">
+        <blockquote>
+	<table>
+	<tr><td><b>Username*</b></td>
+	<td><input type="text" name="username" id="eu_username_[+ $edit_user->id +]" size=30 value="[+ $edit_user->username +]"></td></tr>
+	<tr><td><b>Password</b></td>
+	<td><input type="text" name="password" id="eu_password_[+ $edit_user->id +]" size=30 value=""></td></tr>
+	<tr><td><b>Full Name*</b></td>
+	<td><input type="text" name="full_name" id="eu_full_name_[+ $edit_user->id +]" size=30 value="[+ $edit_user->full_name +]"></td></tr>
+	<tr><td><b>Email</b></td>
+	<td><input type="text" name="email" id="eu_email_[+ $edit_user->id +]" size=30 value="[+ $edit_user->email +]"></td></tr>
+	<tr><td><b>Access Lvl</b></td>
+	<td><select name="access_id" id="eu_access_[+ $edit_user->id +]">
+	[$ foreach (@all_access) $]
+	<option value="[+ $_->id +]"  [$ if ($edit_user->access->id eq $_->id) $]selected[$ endif $] >[+ $_->name +]</option>
+	[$ endforeach $]</select></td></tr>
+	<tr><td><b>Can Login</b></td>
+	<td><input type="checkbox" name="is_active" id="eu_active_[+ $edit_user->id +]" value="1" [$ if ($edit_user->is_active) $]CHECKED[$ endif $]></td></tr>
+	<tr><td><b>Must Change<br>Password</b></td>
+	<td><input type="checkbox" name="change_passwd" id="eu_change_passwd_[+ $edit_user->id +]" value="1" [$ if ($edit_user->change_passwd) $]CHECKED[$ endif $]></td></tr>
+	<tr><td>&nbsp;</td>
+	<td><button id="edit_button_[+ $edit_user->id +]" style="background:#ffffff;" onClick="edit_user(this.form); return false;">Edit <img src="/images/user_edit.gif" border=0></button></td></tr>
+	</table>
+        </blockquote>
+	</form>
+[$ else $]
+User Not Found.  Please refresh the page.
+[$ endif $]

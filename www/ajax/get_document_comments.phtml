@@ -1,0 +1,27 @@
+[-
+ use CGI::Cookie;
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Document;
+ use HDS::DocumentComment;
+
+ $doc = HDS::Document->retrieve($fdat{doc_id});
+
+
+-]
+
+	[$ if (scalar $doc->comments() > 0) $]
+	[$ foreach $comment ($doc->comments()) $]
+	<div class="comments_detail">
+	<div style="float:left;">[+ $comment->user->full_name +]<br>([+ HDS::DBI::db_date_pretty($comment->create_date) +]))</div>
+	[+ $comment->comment +]
+	</div>
+	[$ endforeach $]
+	[$ endif $]
+	<table>
+	<tr><td valign="top">Leave a comment:</td>
+	<td><textarea name="new_comment_[+ $doc->id +]" cols=40 rows=5 wrap="hard"></textarea></td></tr>
+	<tr>
+	<td>&nbsp;</td><td><button id="post_button_[+ $doc->id +]" style="background:#ffffff;" onClick="post_comment([+ $doc->id +]);">Post <img id="comments_toggle_[+ $doc->id +]" src="/images/comments2.gif" border=0></button></td></tr>
+	</table>

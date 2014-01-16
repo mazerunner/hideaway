@@ -1,0 +1,253 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+use HDS::Document;
+use HDS::Category;
+
+$user    = undef;
+@categories = ();
+@docs = ();
+%cookie_jar = CGI::Cookie->fetch($r);
+$user_access = 0;
+@all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+$access      = {};
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+foreach my $a (HDS::Access->retrieve_all()) {
+	$access->{$a->name} = $a;
+}
+
+if ($user) {
+	$user_access = $user->access->level;
+}
+
+foreach my $cat (HDS::Category->retrieve_all()) {
+	if ($user_access >= $cat->access->level) {
+		push @categories, $cat;
+	}
+}
+
+ @categories = sort {$a->access->level <=> $b->access->level} @categories;
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+
+<link rel="stylesheet" type="text/css" href="/js/jquery_plugins/jquery.tablesorter/themes/blue/style.css" />
+<script type="text/javascript" src="/js/jquery_plugins/jquery.tablesorter/jquery.tablesorter.min.js"></script>
+<script type="text/javascript">
+
+var img_cache = new Image;
+img_cache.src = "/images/loading2.gif";
+
+function doc_download(doc_id) {
+	window.location.href = 'ajax/doc_download.pl?uniq='+new Date().getTime()+"&doc_id="+doc_id;
+}
+
+function doc_take_action(doc_id, action) {
+	if (action == '') {
+		return false;
+	}
+	else if (action == 'download') {
+		doc_download(doc_id);
+	}
+	else if (action == 'edit') {
+		alert("Edit not supported, yet.");
+	}
+	else if (action == 'replace') {
+		alert("Replace not supported, yet.");
+	}
+}
+
+function add_document_BROKE(cat_id) {
+	var form = document['add_document_form_'+cat_id];
+	form.submit();
+	
+	$("#new_document_body_"+cat_id).html('<img src="/images/loading1.gif">');
+	return false;
+	
+}
+
+
+
+function doc_upload_OLDE(form) {
+	form.submit();
+	return false;
+}
+
+
+function add_document(form, cat_id) {
+	var body_div   = $("#new_document_body_"+cat_id);
+	var status_div = $("#new_document_status_"+cat_id);
+	var iframe     = $("#upload_iframe_"+cat_id);
+	var doc_list   = $("#document_list_"+cat_id);
+	var wrong      = '';
+	
+	if (form.title.value == '') {
+		wrong += "Please provide a Title\n";
+	}
+	if (form.description.value == '') {
+		wrong += "Please provide a Description\n";
+	}
+	if (form.upload_file.value == '') {
+		wrong += "Please provide a Document to upload\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	iframeId = document.getElementById("upload_iframe_"+cat_id);
+	
+	// Add event...
+	var eventHandler = function()  {
+		if (iframeId.detachEvent)
+			iframeId.detachEvent("onload", eventHandler);
+		else
+			iframeId.removeEventListener("load", eventHandler, false);
+
+		// Message from server...
+		if (iframeId.contentDocument) {
+			content = iframeId.contentDocument.body.innerHTML;
+			iframeId.contentDocument.body.innerHTML = '';
+		} else if (iframeId.contentWindow) {
+			content = iframeId.contentWindow.document.body.innerHTML;
+			iframeId.contentWindow.document.body.innerHTML = '';
+		} else if (iframeId.document) {
+			content = iframeId.document.body.innerHTML;
+			iframeId.document.body.innerHTML = '';
+		}
+		
+		//alert(iframe.html());
+		
+		var pieces = content.split('~~~~~');
+		status_div.html(pieces[0]);
+		
+		var new_row = '<tr>';
+		var tds = pieces[1].split('|');
+		for (var i=0; i< tds.length; i++) {
+			new_row += '<td>' + tds[i] + '</td>';
+		}
+		new_row += '</tr>';
+		$("#document_list_"+cat_id).children('tbody').append(new_row);
+		form.reset();
+		
+	}
+
+	if (iframeId.addEventListener)
+		iframeId.addEventListener("load", eventHandler, true);
+	if (iframeId.attachEvent)
+		iframeId.attachEvent("onload", eventHandler);
+
+	// Submit the form...
+	form.submit();
+
+	status_div.html('<img src="/images/loading2.gif">');
+
+	return false;
+}
+
+
+$(document).ready(function() {
+	$('.new_document_body').hide();
+	
+  $('.new_document_toggle').click( function() {
+      var checkElement = $(this).next();
+      if(($(checkElement).is('div')) && ($(checkElement).is(':visible'))) {
+        $(checkElement).slideUp('normal');
+		return false;
+      }
+      if(($(checkElement).is('div')) && (!$(checkElement).is(':visible'))) {
+        $(checkElement).slideDown('normal');
+        return false;
+      }
+  });
+});
+
+</script>
+[$ foreach $cat (@categories) $]
+	[- 
+	@docs = ();
+	foreach $doc ($cat->documents()) {
+		if ($user_access >= $doc->access->level) {
+			push @docs, $doc;
+		}
+	}
+	-]
+	<div class="category_header">[+ $cat->name +] &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>(Requires [+ $cat->access->name +] access level to see)</i></div>
+	<div class="category_body">[+ $cat->description +]
+	<table class="document_management" id="document_list_[+ $cat->id +]">
+<thead>
+<tr><th width="20%">Title</th>
+<th width="37%">Description</th>
+<th width="10%">Access</th>
+<th width="15%">Created</th>
+<th width="8%">Size</th>
+<th width="10%">Action</th></tr>
+</thead>
+<tbody>
+	[$ foreach $doc (@docs) $]
+	<tr>
+	<td><a href="javascript:;" onClick="doc_download([+ $doc->id +]); return false;">[+ $doc->title +]</a></td>
+	<td>[+ $doc->description +]</td>
+	<td>[+ $doc->access->name +]</td>
+	<td>[+ HDS::DBI::display_date($doc->create_date) +]</td>
+	<td>[+ $doc->display_size() +]</td>
+	<td><select id="doc_action" name="doc_action" onChange="doc_take_action([+ $doc->id +], this[this.selectedIndex].value);">
+	<option value="">Select</option>
+	<option value="replace">Replace</option>
+	<option value="edit">Edit</option>
+	<option value="download">Download</option>
+	</select>
+	</td>
+	</tr>
+	[$ endforeach $]
+</tbody>
+</table>
+	
+	[$ if ($user_access >= $access->{'Board Member'}->level) $][# BM access #]
+	<img class="new_document_toggle" id="new_document_toggle" src="/images/add_doc.gif" border=0>
+	<div class="new_document_body" id="new_document_body_[+ $cat->id +]">
+	<div id="new_document_status_[+ $cat->id +]" class="new_document_status">Upload a new document</div>
+	<form action="/ajax/doc_upload.phtml" method="post" enctype="multipart/form-data" target="upload_iframe_[+ $cat->id +]">
+	<table>
+	<tr><td valign="top">Owner:</td>
+	<td>[+ $user->full_name +]<input type="hidden" name="owner_id" value="[+ $user->id +]"</td></tr>
+	<tr><td valign="top">Category:</td>
+	<td>[+ $cat->name +]<input type="hidden" name="category_id" value="[+ $cat->id +]"></td></tr>
+	<tr><td valign="top">Access:</td><td><select name="access_id">
+	[$ foreach (@all_access) $]
+	[$ if ($_->level >= $cat->access->level) $]
+	<option value="[+ $_->id +]">[+ $_->name +]</option>
+	[$ endif $]
+	[$ endforeach $]</select></td></tr>
+	<tr><td valign="top">Title:</td><td><input type="text" name="title" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Description:</td><td><input type="text" name="description" size=50 maxlength=200></td></tr>
+	<tr><td valign="top">Document:</td><td><input type="file" name="upload_file" size=50></td></tr>
+	<tr><td valign="top">Visible:</td><td><input type="checkbox" name="is_active" value="1" checked="on"></td></tr>
+	
+	<tr>
+	<td>&nbsp;</td><td><button style="background:#ffffff;" onClick="add_document(this.form, [+ $cat->id +]); return false;">Add <img src="/images/add_doc.gif" border=0></button></td></tr>
+	</table>
+	</form>
+	</div>
+	[$ endif $] [# BM access #]</div>
+	<p>
+[$ endforeach $]
+	
+[$ foreach $cat (@categories) $]
+[# <iframe style="width:0px; hieght:0px; " id="new_document_iframe_[+ $cat->id +]"></iframe> #]
+<iframe style="visibility:hidden; width:0px; height:0px; " id="upload_iframe_[+ $cat->id +]"  name="upload_iframe_[+ $cat->id +]"></iframe>
+[$ endforeach $]
+

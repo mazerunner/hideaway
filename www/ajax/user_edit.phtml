@@ -1,0 +1,51 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+
+ $edit_user   = undef;
+ $user        = undef;
+ $pass_crypt  = "";
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ $user_access = 0;
+ $success     = 0;
+ $message     = "No information available";
+ $content     = "No information available";
+ $sep_char    = "~~~~~";
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{user_id}) {
+      $edit_user = HDS::User->retrieve($fdat{user_id});
+   }
+   if ($edit_user) {
+      $edit_user->username($fdat{username});
+      $edit_user->full_name($fdat{full_name});
+      $edit_user->email($fdat{email});
+      $edit_user->access($fdat{access_id});
+      $edit_user->is_active($fdat{is_active});
+      $edit_user->change_passwd($fdat{change_passwd});
+      #$edit_user->phone1($fdat{phone1});
+      
+      if ($fdat{password}) {
+         $pass_crypt = md5_hex($fdat{password});  # Well, not really encrypted
+         $edit_user->password($pass_crypt);
+      }
+      $edit_user->update();
+
+      $success = 1;
+      $message = "<blockquote><b>User successfully edited.</b></blockquote>";
+      $content = $fdat{username} . $sep_char . 
+          $fdat{full_name} . $sep_char . 
+          $edit_user->access->name;
+   }
+   else {
+      $message = "User does not exist.  Please refresh the page.";
+   }
+}
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][+ $sep_char +][+ $content +][- $escmode = $old_escmode; -]

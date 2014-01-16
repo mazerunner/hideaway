@@ -1,0 +1,32 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+
+ $edit_user   = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ $success     = 0;
+ $message     = "No information available";
+ $sep_char    = "~~~~~";
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{user_id}) {
+      $edit_user = HDS::User->retrieve($fdat{user_id});
+   }
+   if ($edit_user) {
+      $edit_user->is_active(1);
+      $edit_user->update();
+      $success = 1;
+   }
+   else {
+      $message = "User does not exist.  Please refresh the page.";
+   }
+}
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][- $escmode = $old_escmode; -]

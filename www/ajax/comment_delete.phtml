@@ -1,0 +1,39 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::DocumentComment;
+
+ $comment     = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ $success     = 0;
+ $message     = "No information available";
+ $sep_char    = "~~~~~";
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{comment_id}) {
+      $comment = HDS::DocumentComment->retrieve($fdat{comment_id});
+   }
+   if ($comment) {
+      #$comment->delete();
+      $comment->is_active(0);
+      $comment->update();
+
+      $success = 1;
+      $message = "Comment successfully deleted.";
+   }
+   else {
+      $message = "Comment does not exist.  Please refresh the page.";
+   }
+}
+ else {
+    $message = "Please login.";
+ }
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][- $escmode = $old_escmode; -]

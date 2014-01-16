@@ -1,0 +1,12 @@
+#!/bin/csh
+
+setenv SVR_HOME /home/stevew/www
+setenv SVR_NAME dev
+
+foreach f (HDS/*.pm)
+#    echo $f
+    /usr/local/bin/perl -cw $f
+end
+
+
+

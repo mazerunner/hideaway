@@ -1,0 +1,65 @@
+
+<html>
+<head>
+	<title>HDS Template</title>
+	
+<!-- jQuery -->
+<script type="text/javascript" src="js/jquery/dist/jquery.js"></script>
+<script type="text/javascript" src="js/jqueryui/js/jquery-ui-1.7.1.custom.min.js"></script>
+<link rel="stylesheet" type="text/css" href="js/jqueryui/css/smoothness/jquery-ui-1.7.1.custom.css" />
+
+<link rel="stylesheet" type="text/css" href="css/style.css" >
+
+<script type="text/javascript">
+$(document).ready(function() {
+	$('#nav_tabs').tabs();
+	});
+</script>
+
+</head>
+
+<body>
+<div id="header_home_background">
+<div class="float_right">
+Not Signed In<br>
+Access to Public Information<br>
+May 22, 2009<br>
+<!--
+<table><tr>
+<td>Login:</td>
+<td><input type="text" id="login_username" name="login_username" size=8 maxlength=50></td></tr>
+<tr>
+<td>Pass:</td>
+<td><input type="password" id="login_password" name="login_password" size=8 maxlength=50></td></tr>
+</table>
+-->
+</div>
+</div>
+
+			<div class="headline">
+				<div class="tagline"></div>
+			Login: <input type="text" id="login_username" name="login_username" size=8 maxlength=50>
+			Pass: <input type="password" id="login_password" name="login_password" size=8 maxlength=50>
+<a href="javascript:;" onClick="attempt_login();"><img src="images/right_arrow_1.gif" border=0></a>
+			</div>
+
+<div id="nav_tabs">
+<ul>
+	<li><a href="#nav_home"><span>Home</span></a></li>
+	<li><a href="#nav_docs"><span>Documents</span></a></li>
+</ul>
+
+<div id="nav_home">
+<h2>Home</h2>
+</div>
+
+<div id="nav_docs">
+<h2>Documents</h2>
+</div>
+
+</div>
+
+		
+		
+</body>
+</html>

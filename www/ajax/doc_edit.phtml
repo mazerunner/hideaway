@@ -1,0 +1,49 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Document;
+ use HDS::Category;
+
+ $doc         = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ $success     = 0;
+ $message     = "No information available";
+ $content     = "No information available";
+ $sep_char    = "~~~~~";
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{doc_id}) {
+      $doc = HDS::Document->retrieve($fdat{doc_id});
+   }
+   if ($doc) {
+      $doc->owner($fdat{owner_id});
+      $doc->category($fdat{category_id});
+      $doc->title($fdat{title});
+      $doc->description($fdat{description});
+      $doc->access($fdat{access_id});
+      $doc->is_active($fdat{is_active});
+      $doc->modify_date(HDS::DBI::db_now());
+      $doc->update();
+
+      $success = 1;
+      $message = "<blockquote><b>$fdat{title} successfully edited.</b></blockquote>";
+      $content = $fdat{title} . $sep_char . 
+          $fdat{description} . $sep_char . 
+          $doc->access->name;
+   }
+   else {
+      $message = "Document does not exist.  Please refresh the page.";
+   }
+}
+ else {
+    $message = "Please login.";
+ }
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][+ $sep_char +][+ $content +][- $escmode = $old_escmode; -]

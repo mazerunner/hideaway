@@ -1,0 +1,306 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+
+$user    = undef;
+@nav_access = ();
+$user_access_level = 0;
+
+# Tabs could become DB driven
+@tab_objects = (
+	{title => 'Home',
+	url    => 'home.html',
+	access  => 'Public',
+	level  => 0,
+	nav_id => 'nav_Home',
+	},
+	
+	{title => 'Documents',
+	url    => 'documents.html',
+	access  => 'Public',
+	level  => 0,
+	nav_id => 'nav_Documents',
+	},
+	
+	#{title => 'Bulletin Board',
+	#url    => 'bb.html',
+	#level  => 'Homeowner',
+	#action => 'open_page',
+	#},
+	
+	{title => 'Document Management',
+	url    => 'document_management.html',
+	access => 'Board Member',
+	level  => 30,
+	nav_id => 'nav_DocumentManagement',
+	},
+	
+	{title => 'Administration',
+	url    => '/admin.html',
+	access => 'Administrator',
+	level  => 50,
+	nav_id => 'nav_Administration',
+	},
+	
+	{title => 'Contact Us',
+	url    => '/contact_us.html',
+	access => 'Public',
+	level  => 0,
+	nav_id => 'nav_ContactUs',
+	},
+);
+
+%cookie_jar = CGI::Cookie->fetch($r);
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+	$user_access_level = $user->access->level;
+}
+
+foreach $tab (@tab_objects) {
+	if ($user_access_level >= $tab->{level}) {
+		push @nav_access, $tab;
+	}
+}
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text-html; charset=utf-8"> 
+[$ if ($user) $]
+	<title>[+ $user->full_name +] | The Hideaway Homeowners Association</title>
+[$ else $]
+	<title>The Hideaway Homeowners Association</title>
+[$ endif $]
+<link rel="shortcut icon" href="/favicon.ico" type="image/vnd.microsoft.icon" [# type="image/x-icon" #] /> 
+
+	
+<!-- jQuery -->
+<script type="text/javascript" src="js/jquery/dist/jquery.js"></script>
+<script type="text/javascript" src="js/jqueryui/js/jquery-ui-1.7.1.custom.min.js"></script>
+<link rel="stylesheet" type="text/css" href="js/jqueryui/css/smoothness/jquery-ui-1.7.1.custom.css" />
+
+<link rel="stylesheet" type="text/css" href="css/style.css" >
+
+<script type="text/javascript">
+var tab_access = new Object();
+
+var img_cache = new Image();
+img_cache.src = "/images/loading2.gif";
+
+	
+function attempt_login(form) {
+	$("#access_message").html('<img src="/images/loading2.gif">');
+	
+	if (form.login_username.value == '' || form.login_password.value == '') {
+		$("#access_message").html('Please provide your username and password');
+		return false;
+	}
+	
+	var un_pw_chk = "ajax/user_login.phtml?uniq=" + new Date().getTime();
+	//var un_pw_chk = "ajax/un_pw_chk.phtml";
+	var un_pw_data = $(form).serialize();
+	
+	$.post(un_pw_chk, un_pw_data, function (data, textStatus) {
+		var return_data = data.split("|");
+		if (return_data[0] == "1") {
+			var date = new Date();
+			var expires = "";
+			//if (form.remember.value == "1") {
+			if (form.remember.checked) {
+				date.setTime(date.getTime()+(365*24*60*60*1000));
+				expires = "; expires="+date.toGMTString();
+			}
+			
+	   		document.cookie = 'user_id='+return_data[1]+expires;
+	   		document.cookie = 'user_full_name='+return_data[2]+expires;
+			location.href   = 'index.html';
+		}
+		else if (return_data[0] == "2") {
+			//$("#access_message").html(return_data[1]);
+			$("#access_login").html(return_data[1]);
+		}
+		else {
+			//alert(return_data[1]);
+			$("#access_message").html(return_data[1]);
+		}
+			
+    });
+
+	// dont let the form submit
+	return false;	
+}
+
+function display_fail() {
+	$("login_dialog").html("Sorry... <br><a href='javascript:;' onClick='document.reload();'>try again</a>");
+	
+}
+
+function change_password(user_id) {
+	var wrong = '';
+	
+	alert('new_pw = ' + $("#new_password").val());
+	alert('v new_pw = ' + $("#v_new_password").val());
+	
+	if ($("#new_password").val() == '' && $("#v_new_password").val() == '') {
+		wrong += "Please supply a new password.";
+	}
+	else if ($("#new_password").val() != $("#v_new_password").val()) {
+		wrong += "Passwords do not match.";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	else {
+		var pwURL = "ajax/user_change_password.phtml?uniq=" + new Date().getTime();
+		//var un_pw_chk = "ajax/un_pw_chk.phtml";
+		//var pwData = $(form).serialize();
+		var pwData = 'user_id='+ user_id + '&new_password=' + $("#new_password").val() + '&v_new_password=' + $("#new_password").val();
+	
+		$.post(pwURL, pwData, function (data, textStatus) {
+			var return_data = data.split("|");
+			if (return_data[0] == "0") {
+				alert(return_data[1]);
+				return false;
+			}
+			else if (return_data[0] == "1") {
+				$("#access_login").html(return_data[3]);
+				
+				var date = new Date();
+				var expires = "";
+				if ($("#remember").val() == "1") {
+					date.setTime(date.getTime()+(365*24*60*60*1000));
+					expires = "; expires="+date.toGMTString();
+				}
+			
+	   			document.cookie = 'user_id='+return_data[1]+expires;
+	   			document.cookie = 'user_full_name='+return_data[2]+expires;
+				location.href   = 'index.html';
+			}
+		});
+	}
+	
+	return false;
+}
+
+function sign_out() {
+	var expires = "; expires=Mon, 26 Jul 1997 05:00:00 GMT";
+			
+	document.cookie = 'user_id='+expires;
+	document.cookie = 'user_full_name='+expires;
+	
+	location.reload();
+}
+
+/////
+// Initialization stuff
+/////
+$(document).ready(function() {
+	$('#nav_tabs').tabs();
+	$('#access_login').hide();
+	
+	// use Enter key for login
+	$('input#login_password').bind('keypress', function(e) {
+		if(e.keyCode==13){
+			attempt_login();
+        }
+	});
+	
+	$("#access_level").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+	
+	$("#access_level").click(function() {
+		if (! $("#access_login").is(':visible')) {
+			$("#access_login").slideDown();
+			return false;
+		}
+		else {
+			$("#access_login").slideUp();
+			return false;
+		}
+	});
+	
+});
+	
+
+</script>
+
+</head>
+
+<body>
+<div id="site_container">
+<table width="100%">
+<td width="258">
+<img src="images/hideaway_logo.gif"></td>
+<td valign="top">
+<center><h1>The Hideaway Homeowners Association</h1></center>
+<div id="access_container">
+[$ if ($user) $]
+Welcome, [+ $user->full_name +]<br>
+[$ endif $]
+[+ HDS::DBI::display_date(HDS::DBI::db_now()) +]<br>
+<div id="access_level">
+[$ if ($user) $]
+Access Level: [+ $user->access->name +]
+[$ else $]
+Public access
+[$ endif $]
+<img src="/images/key1.gif" border=0 valign="bottom">
+</div>
+<div id="access_login">
+[$ if ($user) $]
+[+ $user->username +] ([+ $user->full_name +])<br>
+[+ $user->access->description +] content & documents<br>
+<a href="javascript:;" onClick="sign_out();">Sign Out</a>
+[$ else $]
+If you have been provided a Username & Password, you may Sign In here.<br>
+<br>
+<form>
+Username: <input type="text" id="login_username" name="login_username" size=8 maxlength=50><br>
+Password: <input type="password" id="login_password" name="login_password" size=8 maxlength=50><br>
+<input type="checkbox" name="remember" value="1">&nbsp;Remember Me<br>
+<div id="access_message">&nbsp;</div>
+<button style="background:#FFFFFF;" onClick="attempt_login(this.form); return false;">Login<img src="/images/key1.gif" border=0></button>
+</form>
+[$ endif $]
+</div>
+</div>
+<div style="float:right; color:red; font-size:12px; font-weight:bold;">*Because of the dynamic nature of our web site,<br>this content will change often.</div>
+</td></table>
+
+<div id="nav_tabs">
+<ul>
+[$ foreach (@nav_access) $]
+	<li><a href="[+ $_->{url} +]" title="[+ $_->{nav_id} +]"><span>[+ $_->{title} +]</span></a></li>
+[$ endforeach $]
+</ul>
+
+[$ foreach (@nav_access) $]
+<div id="[+ $_->{nav_id} +]"></div>
+[$ endforeach $]
+</div>
+
+</div>
+</body>
+</html>

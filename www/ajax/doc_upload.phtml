@@ -1,0 +1,117 @@
+[-
+
+use CGI;
+use Data::Dumper;
+use CGI::Cookie;
+use IO::File;
+
+use HDS::DBI;
+use HDS::User;
+use HDS::Access;
+use HDS::Document;
+
+$user       = undef;
+$doc        = undef;
+%cookie_jar = CGI::Cookie->fetch($r);
+$file_name  = time();
+$file_ext   = "";
+$file_info  = {};
+$doc_dir    = "$ENV{SVR_HOME}/files/hideaway/$ENV{SVR_NAME}";
+$db_now     = HDS::DBI::db_now();
+$bytes      = 0;
+$sep_char   = "~~~~~";
+$success    = 0;
+$message    = '';
+$content    = '';
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+	if ($fdat{'upload_file'}) {
+		$file_info = $fdat{'-upload_file'};
+	
+		$file_ext = $fdat{'upload_file'};
+		$file_ext =~ s/^(.*)\.(\w+)$/$2/;
+		$file_ext = lc $file_ext;
+					
+		# Store the file
+		my $buffer;
+		open FILE, "> $doc_dir/$file_name\.$file_ext";
+		binmode FILE;
+		while (read($fdat{'upload_file'},$buffer,32768)) {
+			print FILE $buffer;
+		}
+		close(FILE);
+
+		my $real_name = $fdat{'upload_file'};
+		if ($real_name =~ /^.*\\(.*?)\.(\w+)$/) {
+		   $real_name = $1 . '.' . $2;
+		}
+		
+		$bytes = (stat("$doc_dir/$file_name\.$file_ext"))[7];
+		
+		if ($bytes > 0) {
+			# Create the Document object
+			$doc = HDS::Document->insert({owner => $user->id,
+				access      => $fdat{access_id},
+				category    => $fdat{category_id},
+				title       => $fdat{title},
+				description => $fdat{description},
+				is_active   => $fdat{is_active},
+				create_date => $db_now,
+				modify_date => $db_now,
+				mime_type   => $fdat{'-upload_file'}->{'Content-Type'},
+				bytes       => $bytes,
+				file_name   => $real_name,
+				#file_name   => $fdat{upload_file},
+				file_path   => "$file_name\.$file_ext",
+				download_count => 0,
+			});
+                        if ($doc) {
+                           $success = 1;
+                           $message = 'Document <a href="javascript:;" onClick="doc_download(' . 
+                               $doc->id . '); return false;">' . $doc->title .'</a> created successfully.';
+                        }
+		}
+	}
+}
+-][- $old_escmode = $escmode; $escmode = 0; -][+ $success +][+ $sep_char +][+ $message +][+ $sep_char +]
+[$ if ($success) $]
+<a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'download');">[+ $doc->title +]</a>|(Please refresh)|[+ $doc->description +]|[+ $doc->access->name +]|[+ HDS::DBI::display_date($doc->create_date) +]|[+ $doc->display_size() +]|0
+[#
+	<tr>
+	<td id="display_title_[+ $doc->id +]"><a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'download');">[+ $doc->title +]</a></td>
+	<td style="-ms-filter:progid:DXImageTransform.Microsoft.Alpha(Opacity=50); filter: alpha(opacity=50); opacity: .5;">
+        <a href="javascript:;" onClick="doc_take_action('[+ $doc->id +]', 'download');" title="Download">
+	[$ if ($doc->mime_type eq "text/plain") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_text.gif" border=0></a>
+	[$ elsif ($doc->mime_type eq "application/msword") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_word.gif" border=0></a>
+	[$ elsif ($doc->mime_type eq "application/pdf") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_pdf.gif" border=0></a>
+	[$ elsif ($doc->mime_type eq "application/zip") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_zip.gif" border=0></a>
+	[$ else $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/download1.gif" border=0></a>
+	[$ endif $]
+	
+	<a href="javascript:;" onClick="alert('Please refresh this page.'); /*doc_take_action('[+ $doc->id +]', 'edit');*/" title="Edit"><img src="images/obj_edit.gif" border=0></a>
+	<a href="javascript:;" onClick="alert('Please refresh this page.'); /*doc_take_action('[+ $doc->id +]', 'comments');*/" title="Edit Comments"><img src="images/comments2.gif" border=0></a>
+	<a href="javascript:;" onClick="alert('Please refresh this page.'); /*doc_take_action('[+ $doc->id +]', 'delete');*/" title="Delete"><img src="images/obj_delete.gif" border=0></a>
+	</td>
+	<td id="display_description_[+ $doc->id +]">[+ $doc->description +]</td>
+	<td id="display_access_[+ $doc->id +]">[+ $doc->access->name +]</td>
+	<td>[+ HDS::DBI::display_date($doc->create_date) +]</td>
+	<td id="display_size_[+ $doc->id +]">[+ $doc->display_size() +]</td>
+	<td id="display_count_[+ $doc->id +]">[+ $doc->download_count +]</td>
+	</tr>
+	<tr>
+	<td colspan=8><div class="edit_win" id="doc_edit_[+ $doc->id +]"></div>
+	</td></tr>
+#]
+[$ else $]
+<font color="red">Document NOT created.  Please try again.</font>
+[$ endif $]
+

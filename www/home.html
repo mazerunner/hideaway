@@ -1,0 +1,63 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+use HDS::WebContent;
+
+$user    = undef;
+@content = ();
+$web_content = {};
+%cookie_jar = CGI::Cookie->fetch($r);
+$user_access_level = 0;
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+	$user_access_level = $user->access->level;
+}
+
+foreach my $web (HDS::WebContent->retrieve_all({order_by => 'content_order'})) {
+	if ($user_access_level >= $web->access->level) {
+		push @content, $web;
+	}
+}
+
+#@content = sort { $a->access->level <=> $b->access->level } @content;
+#@content = sort { $a->content_order <=> $b->content_order } @content;
+	
+	#foreach (@content) {
+	#	if ($_->page eq "Home") {
+	#		push @{$web_content->{$_->section}}, $_;
+	#	}
+	#}
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<meta http-equiv="Content-Type" content="text-html; charset=utf-8"> 
+<body>
+[$ foreach $c (@content) $]
+[- 
+	# OMG! IE7 sucks so bad, it does not know how to handle floating elements within a layer.
+	# This extra DIV tag makes images obey their DIV edges in IE7
+	$content = $c->content;
+	if ($content =~ /\<img/im) {
+		$content .= '<div style="clear:both;"></div>';
+	}
+-]
+<div class="web_content">[- $old_escmode = $escmode; $escmode = 0;-][+ $content +][- $escmode - $old_escmode; -]</div>
+<p>
+[$ endforeach $]
+
+</body>
+
+

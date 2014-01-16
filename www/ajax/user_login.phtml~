@@ -1,0 +1,68 @@
+[-
+
+ use Digest::MD5 qw(md5_hex);
+ use HDS::DBI;
+ use HDS::User;
+
+# BEGIN {
+#    $ENV{HDS_CONFIG} = '/home/stevew/www/config/hideaway_config.txt';
+# }
+
+ $user      = undef;
+ $user_good = 0;
+ $success   = 0;
+ $message   = "";
+ $passwd_crypt = "";
+ 
+ if (! $fdat{login_username} || ! $fdat{login_password}) {
+    $message = "Please provide a username and password";
+ }
+ else {
+    ($user_good) =  HDS::User->search({username => $fdat{login_username}});
+
+    if (! $user_good) {
+       $message = "That username does not exist, please try again.";
+    }
+    else {
+       if ($user_good->is_active eq "0") {
+          $message = "That username has been deactivated.";
+       }
+       elsif ($user_good->delete_flag eq "1") {
+          $message = "That username no longer exists.";
+       }
+       else {
+          $passwd_crypt = md5_hex($fdat{login_password});  # Well, not really encrypted
+          if ($user_good->password() eq $passwd_crypt) {
+             if ($user_good->change_passwd) {
+                $success = 2;
+             }
+             else {
+                $success = 1;
+                $message = $user_good->id . "|" . $user_good->full_name;
+             }
+          }
+          else {
+             $message = "That password is incorrect, please try again.";
+          }
+       }
+    }
+ }
+-][+ $success +]|[$ if ($success == 2) $]
+Welcome, [+ $user_good->full_name +]
+<p>
+<center><font color="red"><b>In order to continue, please change your password.</b></font></center>
+<p>
+<form>
+[#<input type="hidden" name="user_id" id="user_id" value="[+ $user_good->id +]">#]
+<input type="hidden" name="remember" id="remember" value="[+ $fdat{remember} +]">
+<table>
+<tr><td>New Password:</td>
+<td><input type="password" name="new_password" id="new_password" size="20"></td></tr>
+<tr><td>Verify Password:</td>
+<td><input type="password" name="v_new_password" id="v_new_password" size="20"></td></tr>
+<tr><td>&nbsp;</td>
+<td><button id="un_change_pw_button" onClick="alert('try this'); change_password([+ $user_good->id +]); return false;">Change</button></td></tr>
+</table>
+</form>
+[$ else $][+ $message +][$ endif $]
+    

@@ -1,0 +1,205 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+
+$user    = undef;
+$access  = {};
+#@access  = ();
+@nav_access = ();
+@tab_access = (
+	#{title => 'Bulletin Board',
+	#url    => 'bb.html',
+	#level  => 'Homeowner',
+	#action => 'open_page',
+	#},
+	{title => 'Document Management',
+	url    => 'document_management.html',
+	level  => 'Board Member',
+	},
+	{title => 'Administration',
+	url    => '/admin/index.html',
+	level  => 'Administrator',
+	},
+	);
+
+%cookie_jar = CGI::Cookie->fetch($r);
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+	#my @acs = HDS::Access->retrieve_all();
+	
+	foreach $a (HDS::Access->retrieve_all()) {
+		$access->{$a->name} = $a;
+	}
+	
+	#@access = sort {$a->level <=> $b->level
+	
+	foreach $tab (@tab_access) {
+		if (! exists $access->{$tab->{level}}) {
+			next;
+		}
+		if ($user->access->level >= $access->{$tab->{level}}->level) {
+			push @nav_access, $tab;
+		}
+	}
+}
+
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+
+<html>
+<head>
+[$ if ($user) $]
+	<title>Hideaway Documents | [+ $user->full_name +]</title>
+[$ else $]
+	<title>Hideaway Documents</title>
+[$ endif $]
+	
+<!-- jQuery -->
+<script type="text/javascript" src="js/jquery/dist/jquery.js"></script>
+<script type="text/javascript" src="js/jqueryui/js/jquery-ui-1.7.1.custom.min.js"></script>
+<link rel="stylesheet" type="text/css" href="js/jqueryui/css/smoothness/jquery-ui-1.7.1.custom.css" />
+
+<link rel="stylesheet" type="text/css" href="css/style.css" >
+
+<script type="text/javascript">
+var tab_access = new Object();
+
+
+
+$(document).ready(function() {
+	$('#nav_tabs').tabs();
+	[#
+	$('#nav_tabs').tabs({
+    select: function(event, ui) {
+        var url = $.data(ui.tab, 'load.tabs');
+		//alert($(ui).
+        if( url ) {
+            location.href = url;
+            return false;
+        }
+        return true;
+    }
+	});
+	#]
+});
+	
+	
+function attempt_login() {
+	var username = $("input#login_username").val();
+	var password = $("input#login_password").val();
+	//var un_pw_chk = "ajax/un_pw_chk.phtml?uniq=" + new Date().getTime();
+	var un_pw_chk = "ajax/un_pw_chk.phtml";
+	var un_pw_data = "un="+username+"&pw="+password;
+	
+	$.post(un_pw_chk, un_pw_data, function (data, textStatus) {
+		var return_data = data.split("|");
+		if (return_data[0] == "1") {
+			var date = new Date();
+			var expires = "";
+			//if (remember == "on") {
+				date.setTime(date.getTime()+(365*24*60*60*1000));
+				expires = "; expires="+date.toGMTString();
+			//}
+			
+	   		document.cookie = 'user_id='+return_data[1]+expires;
+	   		document.cookie = 'user_full_name='+return_data[2]+expires;
+	   		//document.cookie = 'user_id='+return_data[1]+expires+'; path=/';
+	   		//document.cookie = 'user_full_name='+return_data[2]+expires+'; path=/';
+			//location.reload();
+			location.href='index.html';
+		}
+		else {
+			alert(return_data[1]);
+			$("#login_message").html(return_data[1]);
+		}
+			
+    });
+
+	// dont let the form submit
+	return false;	
+}
+
+function display_fail() {
+	$("login_dialog").html("Sorry... <br><a href='javascript:;' onClick='document.reload();'>try again</a>");
+	
+}
+
+function sign_out() {
+	var date = new Date();
+	var expires = "";
+	date.setTime(date.getTime()+(365*24*60*60*1000));
+	expires = "; expires="+date.toGMTString();
+			
+	document.cookie = 'user_id='+expires;
+	document.cookie = 'user_full_name='+expires;
+	
+	location.href='index.html';
+}
+
+</script>
+
+</head>
+
+<body>
+<table class="login_font" cellpadding=0 cellspacing=0><td width=><img src="images/hideaway_logo.gif"></td>
+<td valign="top">
+[$ if ($user) $]
+[+ $user->full_name +]<br>
+[+ $user->access->description +]<br>
+[$ else $]
+Not Signed In<br>
+Access to Public Information<br>
+[$ endif $]
+[+ HDS::DBI::display_date(HDS::DBI::db_now()) +]<br>
+<!--
+<table><tr>
+<td>Login:</td>
+<td><input type="text" id="login_username" name="login_username" size=8 maxlength=50></td></tr>
+<tr>
+<td>Pass:</td>
+<td><input type="password" id="login_password" name="login_password" size=8 maxlength=50></td></tr>
+</table>
+
+			<div class="headline">
+				<div class="tagline">[+ $motd +]</div>
+-->
+[$ if ($user) $]
+<a href="javascript:;" onClick="sign_out();">Sign Out</a>
+[$ else $]
+			Login: <input type="text" id="login_username" name="login_username" size=8 maxlength=50>
+			Pass: <input type="password" id="login_password" name="login_password" size=8 maxlength=50>
+<a href="javascript:;" onClick="attempt_login();"><img src="images/right_arrow_1.gif" border=0></a>
+
+			<div id="login_message"></div>
+[$ endif $]
+</td></table>
+
+<div id="nav_tabs">
+<ul>
+	<li><a href="home.html" title="nav_Home"><span>Home</span></a></li>
+	<li><a href="documents.html" title="nav_Documents"><span>Documents</span></a></li>
+[$ foreach (@nav_access) $]
+	<li><a href="[+ $_->{url} +]"><span>[+ $_->{title} +]</span></a></li>
+[$ endforeach $]
+</ul>
+
+<div id="nav_Home"></div>
+<div id="nav_Documents"></div>
+</div>
+
+		
+</body>
+</html>

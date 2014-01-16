@@ -1,0 +1,90 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+
+$user    = undef;
+%cookie_jar = CGI::Cookie->fetch($r);
+$user_access_level = 0;
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+	$user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+	$user_access_level = $user->access->level;
+}
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<meta http-equiv="Content-Type" content="text-html; charset=utf-8"> 
+<body>
+<script type="text/javascript">
+
+function post_contact_us(form) {
+   var postURL  = "ajax/contact_us_post.phtml?uniq=" + new Date().getTime();
+   var postData = $(form).serialize();
+   
+   $("#contact_status").show();
+   
+   $.post(postURL, postData, function (data, textStatus) {
+	$("#contact_status").hide();
+	$("#contact_detail").html(data);
+	$("#contact_form").hide();
+	$("#contact_detail").show();
+	return false;
+    });
+	
+	return false;
+}
+
+$(document).ready(function() {
+	$("#contact_status").hide();
+});
+
+</script>
+
+<div class="category_header">Contact Us</div>
+	<div class="category_body">Please fill out the form below to contact the administrators of The Hideaway HOA's web site.
+<p>
+<div style="display:none;" id="contact_status"><img src="/images/loading1.gif"></div>
+<div style="display:none; font-weight:bold; color:red;" id="contact_detail"></div>
+<div id="contact_form">
+<form>
+[$ if ($user) $]
+<input type="hidden" name="user_name" value="[+ $user->username +]">
+<input type="hidden" name="user_fullname" id="user_fullname" value="[+ $user->full_name +]">
+<td><input type="hidden" name="user_email" id="user_email" value="[+ $user->email +]">
+[$ endif $]
+<table>
+[$ if ($user_access_level >= 30) $]
+<tr><td>Your Name:</td>
+<td><input type="text" name="fullname" id="fullname" size="50" maxlength=200 value="[+ $user->full_name +]"></td></tr>
+<tr><td>Your Email:</td>
+<td><input type="text" name="email" id="email" size="50" maxlength=200 value="[+ $user->email +]"></td></tr>
+[$ else $]
+<tr><td>Your Name:</td>
+<td><input type="text" name="fullname" id="fullname" size="50" maxlength=200 value=""></td></tr>
+<tr><td>Your Email:</td>
+<td><input type="text" name="email" id="email" size="50" maxlength=200 value=""></td></tr>
+[$ endif $]
+<tr><td>In Ragards to:</td>
+<td><input type="text" size="50" name="subject" id="subject" maxlength=200 value=""></td></tr>
+<tr><td>Body:</td>
+<td><textarea cols="48" rows="6" name="body" id="body" ></textarea></td></tr>
+<tr><td>&nbsp;</td>
+<td><button style="background:#ffffff;" onClick="post_contact_us(this.form); return false;">Contact Us <img src="/images/comments2.gif" border=0></button></td>
+</tr>
+</table>
+</form>
+</div>
+</div>
+
+</body>
+
+

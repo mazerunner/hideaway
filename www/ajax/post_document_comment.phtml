@@ -1,0 +1,59 @@
+[-
+ use CGI::Cookie;
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Document;
+ use HDS::DocumentComment;
+
+ $doc     = undef;
+ $user    = undef;
+ @categories = ();
+ @cats = (); 
+ %cookie_jar = CGI::Cookie->fetch($r);
+ $user_access = 0;
+ $new_id = 0;
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+   $doc = HDS::Document->retrieve($fdat{doc_id});
+}
+
+if ($user) {
+   $new_comment = HDS::DocumentComment->insert({document => $doc->id,
+                                            user     => $user->id,
+                                            create_date => HDS::DBI::db_now(),
+                                            is_active   => 1,
+                                            comment     => $fdat{comment},
+                                         });
+   if ($new_comment) {
+      $new_id = $new_comment->id;
+   }
+                                            
+}
+
+
+-]
+	<tr><td class="comments_user">[+ $new_comment->user->full_name +]<br><i>[+ HDS::DBI::display_date($new_comment->create_date) +]</i></td>
+	<td class="comments_comment">[+ $new_comment->comment +]</td></tr>
+
+
+[#
+
+	[$ if (scalar $doc->comments() > 0) $]
+	[$ foreach $comment ($doc->comments()) $]
+	<div class="comments_detail">
+	<div style="float:left;">[+ $comment->user->full_name +]<br>([+ HDS::DBI::db_date_pretty($comment->create_date) +]))</div>
+	[+ $comment->comment +]
+	</div>
+	[$ endforeach $]
+	[$ endif $]
+         <div id="new_comment_div_[+ $doc->id +]">
+	<table>
+	<tr><td valign="top">Leave a comment:</td>
+	<td><textarea name="new_comment_[+ $doc->id +]" id="new_comment_[+ $doc->id +]" cols=40 rows=3 wrap="hard"></textarea></td></tr>
+	<tr>
+	<td>&nbsp;</td><td><button id="post_button_[+ $doc->id +]" style="background:#ffffff;" onClick="post_comment([+ $doc->id +]);">Post <img id="comments_toggle_[+ $doc->id +]" src="/images/comments2.gif" border=0></button></td></tr>
+	</table>
+         </div>
+#]

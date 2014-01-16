@@ -1,0 +1,62 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Document;
+ use HDS::Category;
+
+ $doc         = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ @all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+ @all_cats    = HDS::Category->retrieve_all({order_by => 'name'});
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{doc_id}) {
+      $doc = HDS::Document->retrieve($fdat{doc_id});
+   }
+}
+-]
+[$ if ($doc) $]
+	<form>
+        <input type="hidden" id="owner_id" name="owner_id" value="[+ $user->id +]">
+        <input type="hidden" id="doc_id"  name="doc_id" value="[+ $doc->id +]">
+        <input type="hidden" id="category_id" name="category_id" value="[+ $doc->category->id +]">
+        <blockquote>
+	<table>
+	<tr><td valign="top"><b>Owner:</b></td>
+	<td>[+ $user->full_name +]</td></tr>
+	<tr><td valign="top"><b>Category:</b></td>
+	<td>[+ $doc->category->name +]
+[#
+<select name="category_id">
+	[$ foreach (@all_cats) $]
+	<option value="[+ $_->id +]" >[+ $_->name +]</option>
+	[$ endforeach $]</select>
+#]</td></tr>
+	<tr><td valign="top"><b>Access:</b></td><td><select id="access_id" name="access_id">
+	[$ foreach (@all_access) $]
+	<option value="[+ $_->id +]" [$ if ($_->id == $doc->access->id) $]selected[$ endif $]>[+ $_->name +]</option>
+	[$ endforeach $]</select></td></tr>
+	<tr><td valign="top"><b>Title:</b></td><td><input type="text" id="title" name="title" size=50 maxlength=100 value="[+ $doc->title +]"></td></tr>
+	<tr><td valign="top"><b>Description:</b></td><td><input type="text" id="description" name="description" size=50 maxlength=200 value="[+ $doc->description +]"></td></tr>
+[#
+	<tr><td valign="top">Replace File:</td><td><input type="file" name="upload_file" size=50></td></tr> 
+#]
+	<tr><td valign="top"><b>Visible:</b></td><td><input type="checkbox" id="is_active" name="is_active" value="1" [$ if ($doc->is_active()) $]checked[$ endif $]></td></tr>
+	
+	<tr>
+	<td>&nbsp;</td><td><button style="background:#ffffff;" onClick="edit_document(this.form, [+ $doc->id +]); return false;">Edit <img src="/images/obj_edit.gif" border=0></button></td></tr>
+	</table>
+        </blockquote>
+	</form>
+
+[$ else $]
+Document Not Found.  Please refresh the page.
+[$ endif $]

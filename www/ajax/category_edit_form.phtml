@@ -1,0 +1,47 @@
+[-
+ use CGI::Cookie;
+ use Digest::MD5 qw(md5_hex);
+
+ use HDS::DBI;
+ use HDS::User;
+ use HDS::Category;
+
+ $cat         = undef;
+ $user        = undef;
+ %cookie_jar  = CGI::Cookie->fetch($r);
+ @all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+ 
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+   if ($fdat{cat_id}) {
+      $cat = HDS::Category->retrieve($fdat{cat_id});
+   }
+}
+-]
+[$ if ($cat) $]
+	<form>
+	<input type="hidden" name="cat_id" value="[+ $cat->id +]">
+        <blockquote>
+	<table>
+	<tr><td><b>Name</b></td>
+	<td><input type="text" name="name" id="ec_name_[+ $cat->id +]" size=30 value="[+ $cat->name +]"></td></tr>
+	<tr><td><b>Description</b></td>
+	<td><input type="text" name="description" id="ec_description_[+ $cat->id +]" size="60" value="[+ $cat->description +]"></td></tr>
+	<tr><td><b>Is Active</b></td>
+	<td><input type="checkbox" name="is_active" id="ec_active_[+ $cat->id +]" value="1" [$ if ($cat->is_active) $]CHECKED[$ endif $]></td></tr>
+	<tr><td><b>Access Reqd</b></td>
+	<td><select name="access_id" id="ec_access_[+ $cat->id +]">
+	[$ foreach (@all_access) $]
+	<option value="[+ $_->id +]"  [$ if ($cat->access->id eq $_->id) $]selected[$ endif $] >[+ $_->name +]</option>
+	[$ endforeach $]</select></td></tr>
+	<tr><td>&nbsp;</td>
+	<td><button id="edit_button_[+ $cat->id +]" style="background:#ffffff;" onClick="edit_category(this.form); return false;">Edit <img src="/images/obj_edit.gif" border=0></button></td></tr>
+	</table>
+        </blockquote>
+	</form>
+[$ else $]
+Category Not Found.  Please refresh the page.
+[$ endif $]

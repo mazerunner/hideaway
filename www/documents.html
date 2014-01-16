@@ -1,0 +1,260 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+use HDS::Document;
+use HDS::DocumentComment;
+use HDS::Category;
+
+$user    = undef;
+@categories = ();
+@cats = (); 
+@docs = ();
+%cookie_jar = CGI::Cookie->fetch($r);
+$user_access_level = 0;
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+	$user_access_level = $user->access->level;
+}
+
+foreach my $a (HDS::Access->retrieve_all()) {
+	$access->{$a->name} = $a;
+}
+	
+foreach my $cat (HDS::Category->retrieve_all()) {
+	if ($user_access_level >= $cat->access->level) {
+		push @categories, $cat;
+	}
+}
+
+ #@categories = sort {$a->access->level <=> $b->access->level} @categories;
+ @categories = sort {uc($a->name) cmp uc($b->name)} @categories;
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> 
+<meta http-equiv="Content-Type" content="text-html; charset=utf-8"> 
+<body>
+<script type="text/javascript">
+var img_cache1 = new Image;
+img_cache1.src = "/images/loading1.gif";
+
+var img_cache2 = new Image;
+img_cache2.src = "/images/loading2.gif";
+
+var cats_order_by_access = new Array();
+var cats_order_by_name   = new Array();
+
+function doc_download(doc_id) {
+	window.location.href = 'ajax/doc_download.pl?uniq='+new Date().getTime()+"&doc_id="+doc_id;
+}
+
+function post_comment(doc_id) {
+   var postURL = "ajax/post_document_comment.phtml?uniq=" + new Date().getTime();
+   var postData = '&doc_id='+doc_id+'&comment=' + escape($("#new_comment_"+doc_id).val());
+   
+   $("#new_comment_status_"+doc_id).html('<img src="/images/loading2.gif">');
+   
+   $.post(postURL, postData, function (data, textStatus) {
+		$("#comments_detail_"+doc_id).children('tbody').append(data);
+		$("#new_comment_status_"+doc_id).html('&nbsp;');
+    });
+}
+
+function sort_categories(order_by) {
+	var new_order = new Array();
+	var tmp_div = $(document.createElement('div'));
+	$(tmp_div).attr('id', 'category_container');
+	
+	if (order_by == 'access_level') {
+		for (var i=0; i<cats_order_by_access.length; i++) {
+			new_order[new_order.length] = $("#category_"+cats_order_by_access[i]);
+		}
+	}
+	else if (order_by == 'cat_name') {
+		for (var i=0; i<cats_order_by_name.length; i++) {
+			new_order[new_order.length] = $("#category_"+cats_order_by_name[i]);
+		}
+	}
+	
+	for (var i = 0; i < new_order.length; i++) {
+		tmp_div.append(new_order[i]);
+	}
+	
+	$("#category_container").replaceWith(tmp_div);
+}
+
+function toggle_comments(elem) {
+	var elem_id = $(elem).attr('id');
+	var div_key = elem_id.replace('comments_toggle_', '');
+	var comments_body = $("#comments_body_"+div_key);
+	
+	if ($(comments_body).is(':visible')) {
+		$(comments_body).slideUp('normal');
+		return false;
+	}
+	if(!$(comments_body).is(':visible')) {
+        $(comments_body).slideDown('normal');
+        return false;
+	}
+}
+
+$(document).ready(function() {
+	$('.comments_body').hide();
+	
+	$(".comments_toggle").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+	
+	$(".doc_download").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+	
+	$('.doc_download').click( function() {
+		var elem_id = $(this).attr('id');
+		var doc_id = elem_id.replace('doc_download_', '');
+		doc_download(doc_id);
+	});
+	
+	$('.comments_toggle').click( function() {
+		toggle_comments($(this));
+	});
+});
+
+</script>
+[$ if (scalar @categories > 1) $]
+Sort Categories by: <select id="sort_cats_by" onChange="sort_categories(this[this.selectedIndex].value);">
+<option value="cat_name">Category Name</option>
+<option value="access_level">Access Level</option>
+</select>
+<p>
+[$ endif $]
+<div id="category_container">
+[$ foreach $cat (@categories) $]
+	[- 
+	@docs = ();
+	foreach $doc ($cat->documents()) {
+		if ($user_access_level >= $doc->access->level) {
+			push @docs, $doc;
+		}
+	}
+	if (scalar @docs > 0) {
+		push @cats, $cat;
+	}
+-]
+[$ if (scalar @docs > 0) $]
+<div id="category_[+ $cat->id +]" class="category_group">
+	<div class="category_header">[+ $cat->name +]</div>
+	<div class="category_body">[+ $cat->description +]
+<table class="documents">
+<thead>
+<tr><th width="20%">Title</th>
+<th width="8%">Action</th>
+<th width="37%">Description</th>
+<th width="12%">Created</th>
+<th width="12%">Modified</th>
+<th width="8%">Size</th>
+<th width="4%">D/L</th>
+</tr>
+</thead>
+<tbody>
+	[- $inx = 0; -]
+	[$ foreach $doc (@docs) $]
+	[- $inx++; -]
+	[# <tr class="[$ if ($inx % 2 == 0) $]zebra_on[$ else $]zebra_off[$ endif $]"> #]
+	<tr class="zebra_off">
+	<td><a href="javascript:;" onClick="doc_download([+ $doc->id +]); return false;">[+ $doc->title +]</a></td>
+	<td>
+	[$ if ($doc->mime_type eq "text/plain") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_text.gif" border=0>
+	[$ elsif ($doc->mime_type eq "application/msword") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_word.gif" border=0>
+	[$ elsif ($doc->mime_type eq "application/pdf") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_pdf.gif" border=0>
+	[$ elsif ($doc->mime_type eq "application/zip") $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/doc_zip.gif" border=0>
+	[$ else $]
+	<img class="doc_download" id="doc_download_[+ $doc->id +]" src="images/download1.gif" border=0>
+	[$ endif $]
+	[$ if ($user_access_level >= $access->{'Board Member'}->level) $]
+	<img class="comments_toggle" id="comments_toggle_[+ $doc->id +]" src="images/comments1.gif" border=0>
+	[$ endif $]
+	</td>
+	<td>[+ $doc->description +]</td>
+	<td>[+ HDS::DBI::display_date($doc->create_date) +]</td>
+	<td>[$ if ($doc->create_date eq $doc->modify_date) $]NONE[$ else $][+ HDS::DBI::display_date($doc->modify_date) +][$ endif $]</td>
+	<td>[+ $doc->display_size() +]</td>
+	<td>[+ $doc->download_count +]</td>
+	</tr>
+	[$ if ($user_access_level >= $access->{'Board Member'}->level) $][# Board access #]
+	<tr>
+	<td colspan=6>
+[# &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img class="comments_toggle" id="comments_toggle_[+ $doc->id +]" src="/images/comments1.gif" border=0> #]
+	<div class="comments_body" id="comments_body_[+ $doc->id +]">
+	<table cellspacing=0 cellpadding=0 class="comments_detail" id="comments_detail_[+ $doc->id +]">
+	<tbody>
+	[$ foreach $comment ($doc->comments({is_active => 1})) $]
+	<tr><td class="comments_user">[+ $comment->user->full_name +]<br><i>[+ HDS::DBI::display_date($comment->create_date) +]</i></td>
+	<td class="comments_comment">[+ $comment->comment +]</td></tr>
+	[$ endforeach $]
+	</tbody>
+	</table>
+	<div id="new_comment_status_[+ $doc->id +]">&nbsp;</div>
+	<div id="new_comment_div_[+ $doc->id +]">
+	<table class="new_comment">
+	<tr><td valign="top">Leave a comment:</td>
+	<td><textarea name="new_comment_[+ $doc->id +]" id="new_comment_[+ $doc->id +]" cols=40 rows=3 wrap="hard"></textarea></td></tr>
+	<tr>
+	<td>&nbsp;</td><td><button id="post_button_[+ $doc->id +]" style="background:#ffffff;" onClick="post_comment([+ $doc->id +]);">Post <img id="comments_toggle_[+ $doc->id +]" src="/images/comments2.gif" border=0></button></td></tr>
+	</table>
+	</div>
+	</div>
+	</td></tr>
+	[$ endif $] [# Board access #]
+	[$ endforeach $]
+</tbody>
+</table></div>
+<p>
+</div>
+[$ endif $]
+[$ endforeach $]
+</div>
+
+<script type="text/javascript">
+
+[# [$ foreach (@cats) $] #]
+[$ foreach (sort {$a->access->level <=> $b->access->level} @cats) $]
+cats_order_by_access[cats_order_by_access.length] = '[+ $_->id +]';
+//cats_order_by_access[cats_order_by_access.length] = $("category_[+ $_->id +]");
+[$ endforeach $]
+
+[# [$ foreach (sort {uc($a->name) cmp uc($b->name) } @cats) $] #]
+[$ foreach (@cats) $]
+cats_order_by_name[cats_order_by_name.length] = '[+ $_->id +]';
+//cats_order_by_name[cats_order_by_name.length] = $("category_[+ $_->id +]");
+[$ endforeach $]
+</script>
+</body>
+
+

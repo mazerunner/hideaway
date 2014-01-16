@@ -1,0 +1,722 @@
+[-
+
+use CGI::Cookie;
+use HDS::DBI;
+use HDS::Config;
+use HDS::User;
+use HDS::Access;
+use HDS::Document;
+use HDS::Category;
+use HDS::WebContent;
+
+$user    = undef;
+@categories = ();
+@cats = (); 
+@docs = ();
+%cookie_jar = CGI::Cookie->fetch($r);
+$user_access = 0;
+@all_access  = HDS::Access->retrieve_all({order_by => 'level'});
+@all_users   = HDS::User->search({delete_flag => 0}, {order_by => 'username'});
+$access      = {};
+
+if (exists $cookie_jar{'user_id'} && $cookie_jar{'user_id'}->value ne "") {
+   $user = HDS::User->retrieve($cookie_jar{'user_id'}->value);
+}
+
+if ($user) {
+	$user_access = $user->access->level;
+}
+
+foreach my $a (@all_access) {
+	$access->{$a->name} = $a;
+}
+
+if ($user_access >= $access->{Administrator}->level) {
+   @categories = sort {$a->access->level <=> $b->access->level} @categories;
+
+
+}
+
+ $http_headers_out{'Content-type'}  = "text/html";
+ $http_headers_out{'Cache-Control'} = "no-cache, must-revalidate";
+ $http_headers_out{'Expires'}       = "-1";
+ 
+
+-]
+
+[$ if ($user_access < $access->{Administrator}->level) $]
+<script type="text/javascript">
+ alert("Please Login with an Adminstrative account");
+ window.location = "/index.html";
+</script>
+[$ else $]
+
+[#<script type="text/javascript" src="/js/ckeditor/ckeditor.js"></script>#]
+<link rel="stylesheet" type="text/css" href="/js/jqueryui/css/smoothness/jquery-ui-1.7.1.custom.css" />
+<script type="text/javascript" src="/js/jqueryui/js/jquery-ui-1.7.1.custom.min.js"></script>
+<script type="text/javascript">
+var loading1_img = new Image;
+loading1_img.src = "/images/loading1.gif";
+
+var loading2_img = new Image;
+loading2_img.src = "/images/loading2.gif";
+
+var user_active_img = new Image;
+user_active_img.src = "images/user_has_access.gif";
+
+var user_inactive_img = new Image;
+user_inactive_img.src = "images/user_has_no_access.gif";
+
+function doc_download(doc_id) {
+	window.location.href = 'ajax/doc_download.pl?uniq='+new Date().getTime()+"&doc_id="+doc_id;
+}
+
+function user_take_action(user_id, action) {
+	if (action == '') {
+		return false;
+	}
+	else if (action == 'edit') {
+		if (! $("#user_edit_"+user_id).is(':visible')) {
+			$("#user_edit_"+user_id).html('<img src="/images/loading1.gif">');
+			$("#user_edit_"+user_id).show();
+			
+			$.post('ajax/user_edit_form.phtml?uniq='+new Date().getTime(), 'user_id='+user_id, function (data, textStatus) {
+				$("#user_edit_"+user_id).html(data);
+			});
+			return false;
+		}
+		else {
+			$("#user_edit_"+user_id).slideUp();
+			return false;
+		}
+	}
+	else if (action == 'active') {
+		//alert("Inactivate not supported, yet.");
+		$("#user_active_img_"+user_id).attr('src', loading2_img.src);
+		
+		$.post('ajax/user_active.phtml?uniq='+new Date().getTime(), 'user_id='+user_id, function (data, textStatus) {
+			var return_data = data.split('~~~~~');
+			
+			if (return_data[0] == '1') {
+				$("#user_active_img_"+user_id).attr('src', user_active_img.src);
+			}
+			else if (return_data[0] == '0') {
+				alert(return_data[1]);
+			}
+			else {
+				alert(data);
+			}
+		});
+		return false;
+	}
+	else if (action == 'inactive') {
+		//alert("Inactivate not supported, yet.");
+		$("#user_active_img_"+user_id).attr('src', loading2_img.src);
+		
+		$.post('ajax/user_inactive.phtml?uniq='+new Date().getTime(), 'user_id='+user_id, function (data, textStatus) {
+			var return_data = data.split('~~~~~');
+			
+			if (return_data[0] == '1') {
+				$("#user_active_img_"+user_id).attr('src', user_inactive_img.src);
+			}
+			else if (return_data[0] == '0') {
+				alert(return_data[1]);
+			}
+			else {
+				alert(data);
+			}
+		});
+		return false;
+	}
+	else if (action == 'delete') {
+		alert("Delete not supported, yet.");
+	}
+}
+
+function cat_take_action(cat_id, action) {
+	if (action == '') {
+		return false;
+	}
+	else if (action == 'edit') {
+		if (! $("#cat_edit_"+cat_id).is(':visible')) {
+			$("#cat_edit_"+cat_id).html('<img src="/images/loading1.gif">');
+			$("#cat_edit_"+cat_id).show();
+			
+			$.post('ajax/category_edit_form.phtml?uniq='+new Date().getTime(), 'cat_id='+cat_id, function (data, textStatus) {
+				$("#cat_edit_"+cat_id).html(data);
+			});
+			return false;
+		}
+		else {
+			$("#cat_edit_"+cat_id).slideUp();
+			return false;
+		}
+	}
+	else if (action == 'active') {
+		alert("Inactivate not supported, yet.");
+	}
+	else if (action == 'delete') {
+		alert("Delete not supported, yet.");
+	}
+}
+
+function web_take_action(web_id, action) {
+	if (action == '') {
+		return false;
+	}
+	else if (action == 'edit') {
+		if ($("#content_edit_row_"+web_id).css('display') == 'none') {
+			$("#content_edit_"+web_id).html('<img src="/images/loading1.gif">');
+			$("#content_edit_row_"+web_id).show();
+			
+			$.post('ajax/content_edit_form.phtml?uniq='+new Date().getTime(), 'content_id='+web_id, function (data, textStatus) {
+				$("#content_edit_"+web_id).html(data);
+			});
+			
+			//CKEDITOR.replace( 'content_html_'+web_id );
+		}
+		else {
+			$("#content_edit_row_"+web_id).slideUp();
+		}
+	}
+	else if (action == 'preview') {
+		alert("Preview not supported, yet.");
+	}
+	else if (action == 'delete') {
+		alert("Delete not supported, yet.");
+	}
+}
+
+function add_user(form) {
+	var wrong   = '';
+	var catURL  = '/ajax/user_add.phtml?uniq=' + new Date().getTime();
+	var catData = '';
+	
+	if (form.username.value == '') {
+		wrong += "Please provide a Username\n";
+	}
+	if (form.password.value == '') {
+		wrong += "Please provide a Password\n";
+	}
+	if (form.full_name.value == '') {
+		wrong += "Please provide a Full name\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	catData = $(form).serialize();
+	
+    $.post(catURL, catData, function (data, textStatus) {
+		add_user_to_list(data, status);
+		form.reset();
+	});
+	
+	return false;
+}
+
+function edit_user(form) {
+	var wrong   = '';
+	var catURL  = '/ajax/user_edit.phtml?uniq=' + new Date().getTime();
+	var catData = '';
+	var user_id = form.user_id.value;
+	
+	if (form.username.value == '') {
+		wrong += "Please provide a Username\n";
+	}
+	//if (form.password.value == '') {
+	//	wrong += "Please provide a Password\n";
+	//}
+	if (form.full_name.value == '') {
+		wrong += "Please provide a Full name\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	catData = $(form).serialize();
+	
+    $.post(catURL, catData, function (data, textStatus) {
+		var results = data.split('~~~~~');
+		if (data == '') {
+			$("#user_edit_"+user_id).html('<font color="red">ERROR: No response from server. Please try again. (' + status + ') </font>');
+			return false;
+		} else if (results.length == 0) {
+			$("#user_edit_"+user_id).html('<font color="red">ERROR: Unexpected response from server. Please try again. (' + status + ': ' + data + ') </font>');
+			return false;
+		} else if (results[0] == '0') {
+			$("#user_edit_"+user_id).html('<font color="red">ERROR: ' + results[1] + '  Please try again.</font>');
+			return false;
+		} else if (results[0] == '1') {
+			$("#user_edit_"+user_id).html(results[1]);
+			$("#display_user_username_"+user_id).html(results[2]);
+			$("#display_user_full_name_"+user_id).html(results[3]);
+			$("#display_user_access_"+user_id).html(results[4]);
+			return false;
+		}
+	});
+	
+	return false;
+}
+
+function add_user_to_list(data, status) {
+	var results = data.split('~~~~~');
+	
+	if (data == '') {
+		$("#new_user_status").html('<font color="red">ERROR: No response from server. Please try again. (' + status + ') </font>');
+		return false;
+	} else if (results.length == 0) {
+		$("#new_user_status").html('<font color="red">ERROR: Unexpected response from server. Please try again. (' + status + ': ' + data + ') </font>');
+		return false;
+	} else if (results[0] == '0') {
+		$("#new_user_status").html('<font color="red">ERROR: ' + results[1] + '  Please try again.</font>');
+		return false;
+	} else if (results[0] == '1') {
+		$("#new_user_status").html(results[1]);
+		$("#user_details").children('tbody').append(results[2]);
+		return false;
+	}
+	
+}
+
+
+function add_category(form) {
+	var wrong   = '';
+	var catURL  = '/ajax/category_add.phtml?uniq=' + new Date().getTime();
+	var catData = '';
+	
+	if (form.name.value == '') {
+		wrong += "Please provide a Category Name\n";
+	}
+	if (form.description.value == '') {
+		wrong += "Please provide a Category Description\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	catData = $(form).serialize();
+	
+    $.post(catURL, catData, function (data, textStatus) {
+		add_category_to_list(data, status);
+	});
+	
+	return false;
+}
+
+function edit_category(form) {
+	var wrong   = '';
+	var catURL  = '/ajax/category_edit.phtml?uniq=' + new Date().getTime();
+	var catData = '';
+	var cat_id  = form.cat_id.value;
+	
+	if (form.name.value == '') {
+		wrong += "Please provide a name\n";
+	}
+	if (form.description.value == '') {
+		wrong += "Please provide a description\n";
+	}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	catData = $(form).serialize();
+	
+	$.post(catURL, catData, function (data, textStatus) {
+		var results = data.split('~~~~~');
+		
+		if (data == '') {
+			$("#cat_edit_"+cat_id).html('<font color="red">ERROR: No response from server. Please try again. (' + status + ') </font>');
+			return false;
+		} else if (results.length == 0) {
+			$("#cat_edit_"+cat_id).html('<font color="red">ERROR: Unexpected response from server. Please try again. (' + status + ': ' + data + ') </font>');
+			return false;
+		} else if (results[0] == '0') {
+			$("#cat_edit_"+cat_id).html('<font color="red">ERROR: ' + results[1] + '  Please try again.</font>');
+			return false;
+		} else if (results[0] == '1') {
+			$("#cat_edit_"+cat_id).html(results[1]);
+			$("#display_cat_name_"+cat_id).html(results[2]);
+			$("#display_cat_description_"+cat_id).html(results[3]);
+			$("#display_cat_access_"+cat_id).html(results[4]);
+			return false;
+		}
+	});
+	
+	return false;
+}
+
+function add_category_to_list(data, status) {
+	var results = data.split('~~~~~');
+	
+	if (data == '') {
+		$("#new_category_status").html('<font color="red">ERROR: No response from server. Please try again. (' + status + ') </font>');
+		return false;
+	} else if (results.length == 0) {
+		$("#new_category_status").html('<font color="red">ERROR: Unexpected response from server. Please try again. (' + status + ': ' + data + ') </font>');
+		return false;
+	} else if (results[0] == '0') {
+		$("#new_category_status").html('<font color="red">ERROR: ' + results[1] + '  Please try again.</font>');
+		return false;
+	} else if (results[0] == '1') {
+		$("#new_category_status").html(results[1]);
+		$("#category_details").children('tbody').append(results[2]);
+		return false;
+	}
+	
+}
+
+function add_content(form) {
+	var wrong   = '';
+	var conURL  = '/ajax/content_add.phtml?uniq=' + new Date().getTime();
+	var conData = '';
+	
+	if (form.content_html.value == '') {
+		wrong += "Please provide HTML Content\n";
+	}
+	//if (form.description.value == '') {
+	//	wrong += "Please provide a Category Description\n";
+	//}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	conData = $(form).serialize();
+	
+    $.post(conURL, conData, function (data, textStatus) {
+		add_content_to_list(data, status);
+	});
+	
+	return false;
+}
+
+function edit_content(form) {
+	var wrong   = '';
+	var conURL  = '/ajax/content_edit.phtml?uniq=' + new Date().getTime();
+	var conData = '';
+	var con_id  = form.content_id.value;
+	
+	if (form.content_html.value == '') {
+		wrong += "Please provide some HTML content\n";
+	}
+	//if (form.description.value == '') {
+	//	wrong += "Please provide a description\n";
+	//}
+	
+	if (wrong != '') {
+		alert(wrong);
+		return false;
+	}
+	
+	conData = $(form).serialize();
+	
+	$.post(conURL, conData, function (data, textStatus) {
+		var results = data.split('~~~~~');
+		
+		if (data == '') {
+			$("#content_edit_"+con_id).html('<font color="red">ERROR: No response from server. Please try again. (' + status + ') </font>');
+			return false;
+		} else if (results.length == 0) {
+			$("#con_edit_"+con_id).html('<font color="red">ERROR: Unexpected response from server. Please try again. (' + status + ': ' + data + ') </font>');
+			return false;
+		} else if (results[0] == '0') {
+			$("#con_edit_"+con_id).html('<font color="red">ERROR: ' + results[1] + '  Please try again.</font>');
+			return false;
+		} else if (results[0] == '1') {
+			$("#content_edit_"+con_id).html(results[1]);
+			$("#display_content_html_"+con_id).html(results[2]);
+			$("#display_content_access_"+con_id).html(results[3]);
+			return false;
+		}
+	});
+	
+	return false;
+}
+
+function add_content_to_list(data, status) {
+	var results = data.split('~~~~~');
+	
+	if (data == '') {
+		$("#new_content_status").html('<font color="red">ERROR: No response from server. Please try again. (' + status + ') </font>');
+		return false;
+	} else if (results.length == 0) {
+		$("#new_content_status").html('<font color="red">ERROR: Unexpected response from server. Please try again. (' + status + ': ' + data + ') </font>');
+		return false;
+	} else if (results[0] == '0') {
+		$("#new_content_status").html('<font color="red">ERROR: ' + results[1] + '  Please try again.</font>');
+		return false;
+	} else if (results[0] == '1') {
+		$("#new_content_status").html(results[1]);
+		$("#content_details").children('tbody').append(results[2]);
+		return false;
+	}
+	
+}
+
+$(document).ready(function() {
+	$('#new_category_body').hide();
+	$('#new_user_body').hide();
+	$('#new_content_body').hide();
+	
+[#
+[$ foreach (HDS::WebContent->retrieve_all({order_by => 'page'})) $]
+	CKEDITOR.replace( 'content_html_[+ $_->id +]' );
+[$ endforeach $]
+#]
+	$('.edit_win').hide();
+
+	$("#new_user_toggle").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+  
+	$("#new_category_toggle").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+	
+	$("#new_content_toggle").hover(
+		function() {
+			$(this).css('cursor', 'pointer');
+		},
+		function() {
+			$(this).css('cursor', 'auto');
+		}
+	);
+	
+  $('#new_user_toggle').click( function() {
+      var checkElement = $(this).next();
+      if(($(checkElement).is('div')) && ($(checkElement).is(':visible'))) {
+        $(checkElement).slideUp('normal');
+		return false;
+      }
+      if(($(checkElement).is('div')) && (!$(checkElement).is(':visible'))) {
+        $(checkElement).slideDown('normal');
+        return false;
+      }
+  });
+	
+  $('#new_category_toggle').click( function() {
+      var checkElement = $(this).next();
+      if(($(checkElement).is('div')) && ($(checkElement).is(':visible'))) {
+        $(checkElement).slideUp('normal');
+		return false;
+      }
+      if(($(checkElement).is('div')) && (!$(checkElement).is(':visible'))) {
+        $(checkElement).slideDown('normal');
+        return false;
+      }
+  });
+  
+  $('#new_content_toggle').click( function() {
+      var checkElement = $(this).next();
+      if(($(checkElement).is('div')) && ($(checkElement).is(':visible'))) {
+        $(checkElement).slideUp('normal');
+		return false;
+      }
+      if(($(checkElement).is('div')) && (!$(checkElement).is(':visible'))) {
+        $(checkElement).slideDown('normal');
+        return false;
+      }
+  });
+  
+});
+
+
+</script>
+
+<div class="category_header">Users</div>
+	<div class="category_body">Maintain User Accounts here
+	<table class="administration" id="user_details">
+<thead>
+<tr><th>Username</th><th>Action</th><th>Full Name</th><th>Access</th></tr>
+</thead>
+<tbody>
+[$ foreach $usr (@all_users) $]
+	<tr>
+	<td><div id="display_user_username_[+ $usr->id +]"> [+ $usr->username +]</div></td>
+	<td><a href="javascript:;" onClick="user_take_action('[+ $usr->id +]', 'edit');" title="Edit [+ $usr->username +]"><img src="images/user_edit.gif" border=0></a>
+[#
+	[$ if ($usr->is_active) $]
+	<a href="javascript:;" onClick="user_take_action('[+ $usr->id +]', 'inactive');" title="Make [+ $usr->username +] Inactive"><img id="user_active_img_[+ $usr->id +]" src="images/user_has_access.gif" border=0></a>
+	[$ else $]
+	<a href="javascript:;" onClick="user_take_action('[+ $usr->id +]', 'active');" title="Make [+ $usr->username +] Active"><img id="user_active_img_[+ $usr->id +]" src="images/user_has_no_access.gif" border=0></a>
+	[$ endif $]
+#]
+	[$ if (! $usr->id == $user->id) $]
+	<a href="javascript:;" onClick="user_take_action('[+ $usr->id +]', 'delete');" title="Delete [+ $usr->username +]"><img src="images/user_delete.gif" border=0></a>
+	[$ endif $]
+	</td>
+	<td><div id="display_user_full_name_[+ $usr->id +]">[+ $usr->full_name +]</div></td>
+	<td><div id="display_user_access_[+ $usr->id +]">[+ $usr->access->name +]</div></td>
+	</tr>
+	<tr>
+	<td colspan=4><div class="edit_win" id="user_edit_[+ $usr->id +]"></div>
+	</td></tr>
+[$ endforeach $]
+</tbody>
+</table>
+
+	<div class="new_user_status" id="new_user_toggle" ><img src="/images/add_user.gif" border=0> Add a new User</div>
+	<div class="new_user_body" id="new_user_body">
+	<div id="new_user_status" class="new_user_status">&nbsp;</div>
+	<form>
+	<table>
+	<tr><td valign="top">Username:</td><td><input type="text" name="username" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Password:</td><td><input type="text" name="password" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Full Name:</td><td><input type="text" name="full_name" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Email:</td><td><input type="text" name="email" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Phone 1:</td><td><input type="text" name="phone1" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Phone 2:</td><td><input type="text" name="phone2" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Access:</td><td><select name="access_id">
+	[$ foreach (@all_access) $]
+	[$ if ($_->name ne "Public") $]
+	<option value="[+ $_->id +]">[+ $_->name +]</option>
+	[$ endif $]
+	[$ endforeach $]</select></td></tr>
+	<tr><td valign="top">Can Login:</td><td><input type="checkbox" name="is_active" value="1" checked="on"></td></tr>
+	<tr><td valign="top">Must Change<br>Password</td><td><input type="checkbox" name="change_passwd" value="1" checked="on"></td></tr>
+	
+	<tr>
+	<td>&nbsp;</td><td><button style="background:#ffffff;" onClick="add_user(this.form); return false;">Add <img src="/images/add_user.gif" border=0></button></td></tr>
+	</table>
+	</form>
+	</div>
+
+</div>
+<p>
+
+<div class="category_header">Document Categories</div>
+	<div class="category_body">Maintain Document Categories here
+	<table class="administration" id="category_details">
+<thead>
+<tr><th width="18%">Name</th><th width="12%">Action</th><th width="50%">Description</th><th width="10%">Access</th><th width="10%">Docs</th></tr>
+</thead>
+<tbody>
+[$ foreach $cat (HDS::Category->retrieve_all({order_by => 'name'})) $]
+	<tr>
+	<td><div id="display_cat_name_[+ $cat->id +]">[+ $cat->name +]</div></td>
+	<td><a href="javascript:;" onClick="cat_take_action('[+ $cat->id +]', 'edit');" title="Edit [+ $cat->name +]"><img src="images/obj_edit.gif" border=0></a>
+[#
+	[$ if ($cat->is_active) $]
+	<a href="javascript:;" onClick="cat_take_action('[+ $cat->id +]', 'inactive');" title="Make [+ $cat->name +] Inactive"><img src="images/obj_has_access.gif" border=0></a>
+	[$ else $]
+	<a href="javascript:;" onClick="cat_take_action('[+ $cat->id +]', 'active');" title="Make [+ $cat->name +] Active"><img src="images/obj_has_no_access.gif" border=0></a>
+	[$ endif $]
+#]
+	[$ if (scalar ($cat->documents()) == 0) $]
+	<a href="javascript:;" onClick="cat_take_action('[+ $cat->id +]', 'delete');" title="Delete [+ $cat->name +]"><img src="images/obj_delete.gif" border=0></a>
+	[$ endif $]
+	</td>
+	
+	<td><div id="display_cat_description_[+ $cat->id +]">[+ $cat->description +]</td>
+	<td><div id="display_cat_access_[+ $cat->id +]">[+ $cat->access->name +]</td>
+	<td>[+ scalar ($cat->documents()) +]</td>
+    </tr>
+	<tr>
+	<td colspan=5><div class="edit_win" id="cat_edit_[+ $cat->id +]"></div>
+	</td></tr>
+[$ endforeach $]
+</tbody>
+</table>
+
+	<img class="new_category_toggle" id="new_category_toggle" src="/images/add_cat.gif" border=0>
+	<div class="new_category_body" id="new_category_body">
+	<div id="new_category_status" class="new_category_status">Add a new Document Category</div>
+	<form>
+	<table>
+	<tr><td valign="top">Access:</td><td><select name="access_id">
+	[$ foreach (@all_access) $]
+	<option value="[+ $_->id +]">[+ $_->name +]</option>
+	[$ endforeach $]</select></td></tr>
+	<tr><td valign="top">Name:</td><td><input type="text" name="name" size=50 maxlength=100></td></tr>
+	<tr><td valign="top">Description:</td><td><input type="text" name="description" size=50 maxlength=200></td></tr>
+	<tr><td valign="top">Visible:</td><td><input type="checkbox" name="is_active" value="1" checked="on"></td></tr>
+	
+	<tr>
+	<td>&nbsp;</td><td><button style="background:#ffffff;" onClick="add_category(this.form); return false;">Add <img src="/images/add_cat.gif" border=0></button></td></tr>
+	</table>
+	</form>
+	</div>
+
+</div>
+<p>
+
+<div class="category_header">Home Page</div>
+	<div class="category_body">Maintain Home Page Content here
+	<table class="administration" id="content_details">
+<thead>
+<tr><th>Action</th><th>Access</th><th>HTML</th></tr>
+</thead>
+<tbody>
+[$ foreach $web (HDS::WebContent->retrieve_all({order_by => 'content_order'})) $]
+	<tr>
+	<td><a href="javascript:;" onClick="web_take_action('[+ $web->id +]', 'edit');" title="Edit"><img src="images/obj_edit.gif" border=0></a>
+	[#<a href="javascript:;" onClick="web_take_action('[+ $web->id +]', 'preview');" title="Preview"><img src="images/ie.gif" border=0></a>#]
+	</td>
+	<td id="display_content_access_[+ $web->id +]">[+ $web->access->name +]</td>
+	<td><div id="display_content_html_[+ $web->id +]" class="web_content">[- $old_escmode = $escmode; $escmode = 0; -][+ $web->content +][- $escmode = $old_escmode; -]</div></td>
+	</tr>
+	<tr class="edit_win" id="content_edit_row_[+ $web->id +]">
+	<td colspan=3><div id="content_edit_[+ $web->id +]"></div>
+	</td></tr>
+[$ endforeach $]
+</tbody>
+</table>
+
+	<img class="new_content_toggle" id="new_content_toggle" src="/images/add_cat.gif" border=0>
+	<div class="new_content_body" id="new_content_body">
+	<div id="new_content_status" class="new_content_status">Add a Home Page Section</div>
+	<form>
+	<table>
+	<tr><td>Placement:</td><td><select name="content_order">
+	[$ foreach my $i (1..10) $]
+	<option value="[+ $i +]">[+ $i +]</option>
+	[$ endforeach $]
+	</select></td></tr>
+
+	<tr><td valign="top">Access:</td><td><select name="access_id">
+	[$ foreach (@all_access) $]
+	<option value="[+ $_->id +]">[+ $_->name +]</option>
+	[$ endforeach $]</select></td></tr>
+	<tr><td>Content</td><td>
+	<textarea cols=80 rows=10 name="content_html" id="content_html"></textarea></td></tr>
+	
+	<tr>
+	<td>&nbsp;</td><td><button style="background:#ffffff;" onClick="add_content(this.form); return false;">Add <img src="/images/add_cat.gif" border=0></button></td></tr>
+	</table>
+	</form>
+	</div>
+
+
+
+</div>
+
+[$ endif $]
+
+
+
+
+
+
+
+
+
