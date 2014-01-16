@@ -45,6 +45,7 @@ foreach my $cat (HDS::Category->retrieve_all()) {
 	<table class="document_management" id="document_list_[+ $cat->id +]">
 ...ETC...
 </pre>
+</block>
 A User may have access to the Category of Files, or individual document.
     The --&gt; means the data is retrieved from more than one table in the database
 </dd>
